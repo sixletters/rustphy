@@ -1,0 +1,61 @@
+// Conditionals (if/else)
+// File: 04_conditionals.gph
+
+let age = 18;
+
+if (age >= 18) {
+    print("You are an adult");
+} else {
+    print("You are a minor");
+}
+
+// Nested if
+let score = 85;
+
+if (score >= 90) {
+    print("Grade: A");
+} else {
+    if (score >= 80) {
+        print("Grade: B");
+    } else {
+        if (score >= 70) {
+            print("Grade: C");
+        } else {
+            print("Grade: F");
+        }
+    }
+}
+
+// Complex conditions
+let temperature = 25;
+let isRaining = false;
+
+if (temperature > 20 && !isRaining) {
+    print("Perfect weather for a walk!");
+} else {
+    print("Maybe stay inside");
+}
+
+// Function with conditional
+fn max(a, b) {
+    if (a > b) {
+        return a;
+    } else {
+        return b;
+    }
+}
+
+print("Max of 10 and 20: " + max(10, 20));
+print("Max of 50 and 30: " + max(50, 30));
+
+// Absolute value function
+fn abs(x) {
+    if (x < 0) {
+        return -x;
+    } else {
+        return x;
+    }
+}
+
+print("abs(-5) = " + abs(-5));   // 5
+print("abs(10) = " + abs(10));   // 10

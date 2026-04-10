@@ -1,0 +1,8 @@
+// Hello World - The simplest program
+// File: 01_hello_world.gph
+
+let greeting = "Hello, World!";
+print(greeting);
+
+let name = "Rustphy";
+print("Welcome to " + name + "!");

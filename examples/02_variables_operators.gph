@@ -1,0 +1,43 @@
+// Variables and Operators
+// File: 02_variables_operators.gph
+
+// Basic arithmetic
+let x = 10;
+let y = 20;
+let sum = x + y;
+let difference = y - x;
+let product = x * y;
+let quotient = y / x;
+
+print("Sum: " + sum);           // 30
+print("Difference: " + difference); // 10
+print("Product: " + product);   // 200
+print("Quotient: " + quotient); // 2
+
+// Compound assignments
+let counter = 0;
+counter += 5;  // counter = counter + 5
+print("After += 5: " + counter); // 5
+
+counter *= 2;  // counter = counter * 2
+print("After *= 2: " + counter); // 10
+
+counter -= 3;  // counter = counter - 3
+print("After -= 3: " + counter); // 7
+
+counter /= 2;  // counter = counter / 2
+print("After /= 2: " + counter); // 3
+
+// Boolean operations
+let isTrue = true;
+let isFalse = false;
+
+print("AND: " + (isTrue && isFalse)); // false
+print("OR: " + (isTrue || isFalse));  // true
+print("NOT: " + (!isTrue));           // false
+
+// Comparisons
+print("10 > 5: " + (10 > 5));   // true
+print("10 < 5: " + (10 < 5));   // false
+print("10 == 10: " + (10 == 10)); // true
+print("10 != 5: " + (10 != 5)); // true

@@ -1,0 +1,37 @@
+// Loops (for loop)
+// File: 05_loops.gph
+
+// Basic for loop
+print("Counting from 1 to 5:");
+for (let i = 1; i <= 5; i += 1) {
+    print(i);
+}
+
+// Loop with step
+print("Even numbers from 0 to 10:");
+for (let i = 0; i <= 10; i += 2) {
+    print(i);
+}
+
+// Countdown
+print("Countdown from 5:");
+for (let i = 5; i > 0; i -= 1) {
+    print(i);
+}
+print("Blast off!");
+
+// Nested loops - multiplication table
+print("Multiplication table (3x3):");
+for (let i = 1; i <= 3; i += 1) {
+    for (let j = 1; j <= 3; j += 1) {
+        let product = i * j;
+        print(i + " * " + j + " = " + product);
+    }
+}
+
+// Sum using loop
+let total = 0;
+for (let i = 1; i <= 10; i += 1) {
+    total += i;
+}
+print("Sum of 1 to 10: " + total); // 55

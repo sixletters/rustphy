@@ -1,0 +1,41 @@
+// Arrays
+// File: 06_arrays.gph
+
+// Creating arrays
+let numbers = [1, 2, 3, 4, 5];
+let names = ["Alice", "Bob", "Charlie"];
+let mixed = [1, "hello", true, 42];
+
+// Accessing elements
+print("First number: " + numbers[0]);  // 1
+print("Second name: " + names[1]);     // Bob
+print("Third element: " + mixed[2]);   // true
+
+// Array length and iteration
+print("Numbers array:");
+for (let i = 0; i < 5; i += 1) {
+    print("numbers[" + i + "] = " + numbers[i]);
+}
+
+// Sum of array elements
+let sum = 0;
+for (let i = 0; i < 5; i += 1) {
+    sum += numbers[i];
+}
+print("Sum of numbers: " + sum); // 15
+
+// Finding max in array
+let values = [3, 7, 2, 9, 1, 5];
+let max = values[0];
+
+for (let i = 1; i < 6; i += 1) {
+    if (values[i] > max) {
+        max = values[i];
+    }
+}
+print("Maximum value: " + max); // 9
+
+// Nested arrays (2D array)
+let matrix = [[1, 2], [3, 4]];
+print("matrix[0][0] = " + matrix[0][0]); // 1
+print("matrix[1][1] = " + matrix[1][1]); // 4

@@ -1,0 +1,45 @@
+// Functions
+// File: 03_functions.gph
+
+// Simple function
+fn greet(name) {
+    return "Hello, " + name + "!";
+}
+
+print(greet("Alice"));
+print(greet("Bob"));
+
+// Function with multiple parameters
+fn add(a, b) {
+    return a + b;
+}
+
+fn multiply(a, b) {
+    return a * b;
+}
+
+let sum = add(5, 3);
+let product = multiply(4, 7);
+
+print("5 + 3 = " + sum);       // 8
+print("4 * 7 = " + product);   // 28
+
+// Nested function calls
+fn double(x) {
+    return x * 2;
+}
+
+fn square(x) {
+    return x * x;
+}
+
+let result = double(square(3));
+print("double(square(3)) = " + result); // double(9) = 18
+
+// Function without explicit return (returns last expression)
+fn isEven(n) {
+    return (n - (n / 2) * 2) == 0;
+}
+
+print("Is 4 even? " + isEven(4)); // true
+print("Is 7 even? " + isEven(7)); // false
