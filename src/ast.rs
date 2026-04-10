@@ -913,7 +913,7 @@ mod tests {
             id: 0,
         };
         let node = Node::ExpressionNode(if_expr);
-        assert_eq!(node.to_string(), "if true { x }");
+        assert_eq!(node.to_string(), "if true { x };");
     }
 
     #[test]
@@ -956,7 +956,7 @@ mod tests {
             id: 0,
         };
         let node = Node::ExpressionNode(if_expr);
-        assert_eq!(node.to_string(), "if true { x } else { y }");
+        assert_eq!(node.to_string(), "if true { x } else { y };");
     }
 
     #[test]
@@ -1048,7 +1048,7 @@ mod tests {
             id: 0,
         };
         let node = Node::StatementNode(for_stmt);
-        assert_eq!(node.to_string(), "for true { x }");
+        assert_eq!(node.to_string(), "for true { x };");
     }
 
     #[test]

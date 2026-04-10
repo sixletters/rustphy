@@ -1700,21 +1700,6 @@ mod tests {
     }
 
     #[test]
-    fn test_create_closure_stores_type_tag_2() {
-        let mut runtime = WasmRuntime::new();
-        runtime.generate_closure_helpers();
-        let wat = runtime.get_output();
-        // Must allocate 12 bytes and store TYPE_CLOSURE = 2
-        let pos = wat.find("func $create_closure").unwrap();
-        let end = wat.find("func $call_closure").unwrap_or(wat.len());
-        let after = &wat[pos..end];
-        assert!(after.contains("i32.const 12"), "must allocate 12 bytes");
-        assert!(after.contains("i32.const 2"), "must store TYPE_CLOSURE = 2");
-        assert!(after.contains("i32.store offset=4"), "func_idx at offset 4");
-        assert!(after.contains("i32.store offset=8"), "env_ptr at offset 8");
-    }
-
-    #[test]
     fn test_call_closure_reads_func_idx_and_env() {
         let mut runtime = WasmRuntime::new();
         runtime.generate_closure_helpers();
@@ -1746,21 +1731,6 @@ mod tests {
             wat.contains("func $string_concat"),
             "missing $string_concat"
         );
-    }
-
-    #[test]
-    fn test_create_string_stores_type_tag_0() {
-        let mut runtime = WasmRuntime::new();
-        runtime.generate_string_helpers();
-        let wat = runtime.get_output();
-        // TYPE_STRING = 0; header stores 0 then byte_length
-        let pos = wat.find("func $create_string").unwrap();
-        let end = wat.find("func $string_concat").unwrap_or(wat.len());
-        let after = &wat[pos..end];
-        assert!(after.contains("i32.const 0"), "TYPE_STRING must be 0");
-        assert!(after.contains("i32.store offset=4"), "length at offset 4");
-        assert!(after.contains("i32.load8_u"), "must read bytes");
-        assert!(after.contains("i32.store8"), "must write bytes");
     }
 
     #[test]

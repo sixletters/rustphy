@@ -7,11 +7,9 @@ pub mod instruction;
 pub mod lexer;
 pub mod machine;
 pub mod parser;
-pub mod parser_v2;
 pub mod symbol_table;
 pub mod token;
 pub mod wasm_environment;
-pub mod wasm_simple_compiler;
 
 // Re-export commonly used types for easier API access
 pub use ast::{ExpressionNode, Node, StatementNode};
@@ -20,7 +18,6 @@ pub use compiler::Compiler as WasmCompiler;
 pub use lexer::Lexer;
 pub use machine::Machine;
 pub use parser::Parser;
-pub use wasm_simple_compiler::WasmSimpleCompiler;
 
 // WASM bindings (only compiled when targeting wasm32)
 #[cfg(target_arch = "wasm32")]

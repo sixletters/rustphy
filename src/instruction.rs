@@ -9,62 +9,45 @@ pub enum Instruction {
     /// Load boolean constant onto the operand stack.
     ///
     /// Stack effect: [] → [bool]
-    LDCB {
-        val: bool,
-    },
+    LDCB { val: bool },
 
     /// Load integer constant onto the operand stack.
     ///
     /// Stack effect: [] → [number]
-    LDCN {
-        val: i128,
-    },
+    LDCN { val: i128 },
 
     /// Load identifier value onto the operand stack.
     ///
     /// Used for reading variable values in expressions.
     /// Stack effect: [] → [value]
-    LDI {
-        val: String,
-    },
+    LDI { val: String },
 
     /// Load string literal onto the operand stack.
     ///
     /// Stack effect: [] → [string]
-    LDSL {
-        val: String,
-    },
+    LDSL { val: String },
 
     /// Load symbolic value from environment onto the operand stack.
     ///
     /// Used for accessing variables by their symbol name.
     /// Stack effect: [] → [value]
-    LDS {
-        sym: String,
-    },
+    LDS { sym: String },
 
     /// Load function closure onto the operand stack.
     ///
     /// Creates a closure capturing the current environment.
     /// Stack effect: [] → [closure]
-    LDF {
-        addr: usize,
-        params: Vec<String>,
-    },
+    LDF { addr: usize, params: Vec<String> },
 
     /// Apply unary operator to the top stack value.
     ///
     /// Stack effect: [value] → [result]
-    UNOP {
-        ops: UNOPS,
-    },
+    UNOP { ops: UNOPS },
 
     /// Apply binary operator to the top two stack values.
     ///
     /// Stack effect: [left, right] → [result]
-    BINOP {
-        ops: BINOPS,
-    },
+    BINOP { ops: BINOPS },
 
     /// Make array from top N stack values.
     ///
@@ -81,9 +64,7 @@ pub enum Instruction {
     /// ```
     ///
     /// Stack effect: [v1, v2, ..., vN] → [array]
-    MKARR {
-        size: usize,
-    },
+    MKARR { size: usize },
 
     /// Make hash map from top 2*size stack values.
     ///
@@ -101,24 +82,18 @@ pub enum Instruction {
     /// ```
     ///
     /// Stack effect: [k1, v1, k2, v2, ..., kN, vN] → [hashmap]
-    MKHASH {
-        size: usize,
-    },
+    MKHASH { size: usize },
 
     /// Jump on false - conditional branch.
     ///
     /// If top of stack is falsy, jump to address; otherwise continue.
     /// Stack effect: [condition] → []
-    JOF {
-        addr: usize,
-    },
+    JOF { addr: usize },
 
     /// Unconditional jump to address.
     ///
     /// Stack effect: [] → []
-    GOTO {
-        addr: usize,
-    },
+    GOTO { addr: usize },
 
     /// Halt execution and return top of stack.
     ///
@@ -129,9 +104,7 @@ pub enum Instruction {
     ///
     /// Pushes a new stack frame onto the RTS.
     /// Stack effect: [] → []
-    ENTERSCOPE {
-        syms: Vec<String>,
-    },
+    ENTERSCOPE { syms: Vec<String> },
 
     /// Exit current scope, restoring previous environment.
     ///
@@ -147,24 +120,18 @@ pub enum Instruction {
     /// Assign top of stack to a symbol in the current environment.
     ///
     /// Stack effect: [value] → [value] (leaves value on stack)
-    ASSIGN {
-        sym: String,
-    },
+    ASSIGN { sym: String },
 
     /// Call function with arity arguments.
     ///
     /// Stack effect: [function, arg1, ..., argN] → [result]
-    CALL {
-        arity: usize,
-    },
+    CALL { arity: usize },
 
     /// Tail call function with arity arguments.
     ///
     /// Optimized call that reuses the current stack frame.
     /// Stack effect: [function, arg1, ..., argN] → [result]
-    TAILCALL {
-        arity: usize,
-    },
+    TAILCALL { arity: usize },
 
     /// Reset the VM state.
     ///
