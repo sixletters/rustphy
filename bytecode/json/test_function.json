@@ -1,0 +1,48 @@
+[
+  {
+    "LDF": {
+      "addr": 5,
+      "params": [
+        "a",
+        "b"
+      ]
+    }
+  },
+  {
+    "LDCN": {
+      "val": 5
+    }
+  },
+  {
+    "LDCN": {
+      "val": 3
+    }
+  },
+  {
+    "CALL": {
+      "arity": 2
+    }
+  },
+  {
+    "GOTO": {
+      "addr": 9
+    }
+  },
+  {
+    "LDS": {
+      "sym": "a"
+    }
+  },
+  {
+    "LDS": {
+      "sym": "b"
+    }
+  },
+  {
+    "BINOP": {
+      "ops": "Multiply"
+    }
+  },
+  "RESET",
+  "DONE"
+]

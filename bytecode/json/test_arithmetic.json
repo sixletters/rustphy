@@ -1,0 +1,28 @@
+[
+  {
+    "LDCN": {
+      "val": 2
+    }
+  },
+  {
+    "LDCN": {
+      "val": 3
+    }
+  },
+  {
+    "LDCN": {
+      "val": 4
+    }
+  },
+  {
+    "BINOP": {
+      "ops": "Multiply"
+    }
+  },
+  {
+    "BINOP": {
+      "ops": "Add"
+    }
+  },
+  "DONE"
+]

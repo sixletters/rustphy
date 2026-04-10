@@ -1,0 +1,13 @@
+[
+  {
+    "LDCN": {
+      "val": 42
+    }
+  },
+  {
+    "UNOP": {
+      "ops": "Negative"
+    }
+  },
+  "DONE"
+]

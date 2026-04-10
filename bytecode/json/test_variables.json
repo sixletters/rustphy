@@ -1,0 +1,39 @@
+[
+  {
+    "ENTERSCOPE": {
+      "syms": [
+        "x"
+      ]
+    }
+  },
+  {
+    "LDCN": {
+      "val": 10
+    }
+  },
+  {
+    "ASSIGN": {
+      "sym": "x"
+    }
+  },
+  {
+    "POP": null
+  },
+  {
+    "LDCN": {
+      "val": 20
+    }
+  },
+  {
+    "LDS": {
+      "sym": "x"
+    }
+  },
+  {
+    "BINOP": {
+      "ops": "Add"
+    }
+  },
+  "EXITSCOPE",
+  "DONE"
+]
