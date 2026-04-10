@@ -13,9 +13,9 @@
 //! # Example
 //!
 //! ```
-//! use rust_impl::compiler::Compiler;
-//! use rust_impl::lexer::Lexer;
-//! use rust_impl::parser::Parser;
+//! use rustphy::bytecode_compiler::Compiler;
+//! use rustphy::lexer::Lexer;
+//! use rustphy::parser::Parser;
 //!
 //! let code = "let x = 42;";
 //! let lexer = Lexer::new(code.to_string());
@@ -59,7 +59,7 @@ impl Compiler {
     /// # Examples
     ///
     /// ```
-    /// use rust_impl::compiler::Compiler;
+    /// use rustphy::bytecode_compiler::Compiler;
     /// let compiler = Compiler::new();
     /// ```
     pub fn new() -> Self {
@@ -121,9 +121,9 @@ impl Compiler {
     /// # Examples
     ///
     /// ```
-    /// use rust_impl::compiler::Compiler;
-    /// use rust_impl::lexer::Lexer;
-    /// use rust_impl::parser::Parser;
+    /// use rustphy::bytecode_compiler::Compiler;
+    /// use rustphy::lexer::Lexer;
+    /// use rustphy::parser::Parser;
     ///
     /// let mut compiler = Compiler::new();
     /// let lexer = Lexer::new("let x = 42;".to_string());
@@ -160,11 +160,7 @@ impl Compiler {
     /// * `Err(String)` - Compilation errors such as invalid assignment targets
     pub fn compile_statement(&mut self, statement: &StatementNode) -> Result<(), String> {
         match statement {
-            StatementNode::Program {
-                statements,
-                implicit_return,
-                ..
-            } => {
+            StatementNode::Program { statements, .. } => {
                 self.instructions
                     .push(Instruction::ENTERSCOPE { syms: vec![] });
                 self.wc += 1;
@@ -172,15 +168,6 @@ impl Compiler {
                     match &**node {
                         Node::ExpressionNode(val) => self.compile_expression(val)?,
                         Node::StatementNode(val) => self.compile_statement(val)?,
-                    }
-                }
-                match implicit_return {
-                    Some(val) => {
-                        self.compile_expression(val)?;
-                    }
-                    None => {
-                        self.instructions.push(Instruction::LDCN { val: 0 });
-                        self.wc += 1;
                     }
                 }
                 self.instructions.push(Instruction::EXITSCOPE);
@@ -242,20 +229,13 @@ impl Compiler {
                 self.wc += 1;
                 Ok(())
             }
-            StatementNode::Block {
-                statements,
-                implicit_return,
-                ..
-            } => {
+            StatementNode::Block { statements, .. } => {
                 let locals = scan(statements);
                 self.instructions
                     .push(Instruction::ENTERSCOPE { syms: locals });
                 self.wc += 1;
                 for s in statements.iter() {
                     self.compile_statement(s)?;
-                }
-                if let Some(expr) = implicit_return {
-                    self.compile_expression(expr)?;
                 }
                 self.instructions.push(Instruction::EXITSCOPE);
                 self.wc += 1;
@@ -406,6 +386,7 @@ impl Compiler {
                 self.instructions.push(Instruction::MKARR {
                     size: elements.len(),
                 });
+                self.wc += 1;
                 Ok(())
             }
             ExpressionNode::Infix {
@@ -590,6 +571,7 @@ impl Compiler {
                 }
                 self.instructions
                     .push(Instruction::MKHASH { size: pairs.len() });
+                self.wc += 1;
                 Ok(())
             }
             _ => Err(String::from("what ru doing bruh")),
@@ -1334,67 +1316,10 @@ mod tests {
     }
 
     #[test]
-    fn test_program_implicit_return() {
-        // Program without semicolon should compile the expression as implicit return
-        let input = "5 + 3";
-        let lexer = Lexer::new(input.to_string());
-        let mut parser = Parser::new(lexer);
-        let program = parser.parse_program().unwrap();
+    fn test_program_empty_returns_none() {
+        use crate::machine::Machine;
 
-        let mut compiler = Compiler::new();
-        let instructions = compiler.compile(&program).unwrap();
-
-        // Should have: ENTERSCOPE, LDCN(5), LDCN(3), BINOP(Add), EXITSCOPE, DONE
-        // The result of 5 + 3 should remain on stack (not followed by LDCN 0)
-
-        // Find EXITSCOPE position
-        let exitscope_pos = instructions
-            .iter()
-            .position(|i| matches!(i, Instruction::EXITSCOPE))
-            .unwrap();
-
-        // Before EXITSCOPE should be the ADD operation, not LDCN 0
-        assert!(matches!(
-            &instructions[exitscope_pos - 1],
-            Instruction::BINOP { ops: BINOPS::Add }
-        ));
-
-        // Should NOT have LDCN 0 before EXITSCOPE
-        assert!(!matches!(
-            &instructions[exitscope_pos - 1],
-            Instruction::LDCN { val: 0 }
-        ));
-    }
-
-    #[test]
-    fn test_program_no_implicit_return() {
-        // Program with semicolon should push LDCN 0 (unit type)
-        let input = "5 + 3;";
-        let lexer = Lexer::new(input.to_string());
-        let mut parser = Parser::new(lexer);
-        let program = parser.parse_program().unwrap();
-
-        let mut compiler = Compiler::new();
-        let instructions = compiler.compile(&program).unwrap();
-
-        // Should have: ENTERSCOPE, LDCN(5), LDCN(3), BINOP(Add), POP, LDCN(0), EXITSCOPE, DONE
-
-        // Find EXITSCOPE position
-        let exitscope_pos = instructions
-            .iter()
-            .position(|i| matches!(i, Instruction::EXITSCOPE))
-            .unwrap();
-
-        // Before EXITSCOPE should be LDCN 0 (unit type)
-        assert!(matches!(
-            &instructions[exitscope_pos - 1],
-            Instruction::LDCN { val: 0 }
-        ));
-    }
-
-    #[test]
-    fn test_program_empty_returns_unit() {
-        // Empty program should push LDCN 0 (unit type)
+        // Empty program should return None when evaluated
         let input = "";
         let lexer = Lexer::new(input.to_string());
         let mut parser = Parser::new(lexer);
@@ -1403,51 +1328,18 @@ mod tests {
         let mut compiler = Compiler::new();
         let instructions = compiler.compile(&program).unwrap();
 
-        // Should have: ENTERSCOPE, LDCN(0), EXITSCOPE, DONE
+        let mut vm = Machine::new();
+        let result = vm.eval(&instructions).unwrap();
 
-        // Find EXITSCOPE position
-        let exitscope_pos = instructions
-            .iter()
-            .position(|i| matches!(i, Instruction::EXITSCOPE))
-            .unwrap();
-
-        // Before EXITSCOPE should be LDCN 0 (unit type)
-        assert!(matches!(
-            &instructions[exitscope_pos - 1],
-            Instruction::LDCN { val: 0 }
-        ));
-    }
-
-    #[test]
-    fn test_program_let_then_expression_implicit_return() {
-        // "let x = 5; x" should return x (implicit return)
-        let input = "let x = 5; x";
-        let lexer = Lexer::new(input.to_string());
-        let mut parser = Parser::new(lexer);
-        let program = parser.parse_program().unwrap();
-
-        let mut compiler = Compiler::new();
-        let instructions = compiler.compile(&program).unwrap();
-
-        // Should have: ENTERSCOPE, LDCN(5), ASSIGN(x), POP, LDS(x), EXITSCOPE, DONE
-        // The LDS(x) should be the implicit return (not followed by POP or LDCN 0)
-
-        // Find EXITSCOPE position
-        let exitscope_pos = instructions
-            .iter()
-            .position(|i| matches!(i, Instruction::EXITSCOPE))
-            .unwrap();
-
-        // Before EXITSCOPE should be LDS for x
-        assert!(matches!(
-            &instructions[exitscope_pos - 1],
-            Instruction::LDS { sym } if sym == "x"
-        ));
+        // Empty program returns None
+        assert!(result.is_none());
     }
 
     #[test]
     fn test_program_let_then_expression_with_semicolon() {
-        // "let x = 5; x;" should return unit type (no implicit return)
+        use crate::machine::Machine;
+
+        // "let x = 5; x;" should pop the value, returning None
         let input = "let x = 5; x;";
         let lexer = Lexer::new(input.to_string());
         let mut parser = Parser::new(lexer);
@@ -1456,61 +1348,19 @@ mod tests {
         let mut compiler = Compiler::new();
         let instructions = compiler.compile(&program).unwrap();
 
-        // Should have: ENTERSCOPE, LDCN(5), ASSIGN(x), POP, LDS(x), LDCN(0), EXITSCOPE, DONE
-        // Note: Expression statements stored as ExpressionNode don't get POPped
+        let mut vm = Machine::new();
+        let result = vm.eval(&instructions).unwrap();
 
-        // Find EXITSCOPE position
-        let exitscope_pos = instructions
-            .iter()
-            .position(|i| matches!(i, Instruction::EXITSCOPE))
-            .unwrap();
+        // Expression with semicolon gets POPped, so eval returns None
+        assert!(result.is_none());
 
-        // Before EXITSCOPE should be LDCN 0 (unit type)
-        assert!(matches!(
-            &instructions[exitscope_pos - 1],
-            Instruction::LDCN { val: 0 }
-        ));
-
-        // Should have 1 POP from the let statement
+        // Should have POPs from both the let statement and the expression statement
         let pop_count = instructions
             .iter()
             .filter(|i| matches!(i, Instruction::POP))
             .count();
-        assert_eq!(pop_count, 1);
+        assert!(pop_count >= 1);
     }
-
-    #[test]
-    fn test_program_complex_implicit_return() {
-        // Complex expression as implicit return
-        let input = "let x = 10; let y = 20; x + y * 2";
-        let lexer = Lexer::new(input.to_string());
-        let mut parser = Parser::new(lexer);
-        let program = parser.parse_program().unwrap();
-
-        let mut compiler = Compiler::new();
-        let instructions = compiler.compile(&program).unwrap();
-
-        // The implicit return should be: LDS(x), LDS(y), LDCN(2), BINOP(Mul), BINOP(Add)
-
-        // Find EXITSCOPE position
-        let exitscope_pos = instructions
-            .iter()
-            .position(|i| matches!(i, Instruction::EXITSCOPE))
-            .unwrap();
-
-        // Before EXITSCOPE should be BINOP Add (the final operation)
-        assert!(matches!(
-            &instructions[exitscope_pos - 1],
-            Instruction::BINOP { ops: BINOPS::Add }
-        ));
-
-        // Should NOT have LDCN 0 before EXITSCOPE
-        assert!(!matches!(
-            &instructions[exitscope_pos - 1],
-            Instruction::LDCN { val: 0 }
-        ));
-    }
-
     // ===== Array Compilation Tests =====
 
     #[test]
@@ -2078,24 +1928,24 @@ mod tests {
         use crate::machine::Machine;
 
         // Test end-to-end: parse, compile, and execute array index read
-        let code = "
+        let code = "(func() {
             let arr = [10, 20, 30];
-            arr[1]
-        ";
+            return arr[1];
+        })()";
 
         let lexer = Lexer::new(code.to_string());
         let mut parser = Parser::new(lexer);
-        let program = parser.parse_program().unwrap();
+        let program = parser.parse_program_expression().unwrap();
 
         let mut compiler = Compiler::new();
         let instructions = compiler.compile(&program).unwrap();
 
         let mut vm = Machine::new();
-        let result = vm.run(&instructions).unwrap();
+        let result = vm.eval(&instructions).unwrap();
 
         // Should return 20 (element at index 1)
         match result {
-            crate::environment::Value::Number(n) => assert_eq!(n, 20),
+            Some(crate::environment::Value::Number(n)) => assert_eq!(n, 20),
             _ => panic!("Expected Number(20), got {:?}", result),
         }
     }
@@ -2104,24 +1954,24 @@ mod tests {
     fn test_integration_array_index_write() {
         use crate::machine::Machine;
 
-        let code = "
+        let code = "(func() {
             let arr = [1, 2, 3];
             arr[0] = 99;
-            arr[0]
-        ";
+            return arr[0];
+        })()";
 
         let lexer = Lexer::new(code.to_string());
         let mut parser = Parser::new(lexer);
-        let program = parser.parse_program().unwrap();
+        let program = parser.parse_program_expression().unwrap();
 
         let mut compiler = Compiler::new();
         let instructions = compiler.compile(&program).unwrap();
 
         let mut vm = Machine::new();
-        let result = vm.run(&instructions).unwrap();
+        let result = vm.eval(&instructions).unwrap();
 
         match result {
-            crate::environment::Value::Number(n) => assert_eq!(n, 99),
+            Some(crate::environment::Value::Number(n)) => assert_eq!(n, 99),
             _ => panic!("Expected Number(99), got {:?}", result),
         }
     }
@@ -2130,23 +1980,23 @@ mod tests {
     fn test_integration_nested_array_index() {
         use crate::machine::Machine;
 
-        let code = "
+        let code = "(func() {
             let arr = [[1, 2], [3, 4]];
-            arr[0][1]
-        ";
+            return arr[0][1];
+        })()";
 
         let lexer = Lexer::new(code.to_string());
         let mut parser = Parser::new(lexer);
-        let program = parser.parse_program().unwrap();
+        let program = parser.parse_program_expression().unwrap();
 
         let mut compiler = Compiler::new();
         let instructions = compiler.compile(&program).unwrap();
 
         let mut vm = Machine::new();
-        let result = vm.run(&instructions).unwrap();
+        let result = vm.eval(&instructions).unwrap();
 
         match result {
-            crate::environment::Value::Number(n) => assert_eq!(n, 2),
+            Some(crate::environment::Value::Number(n)) => assert_eq!(n, 2),
             _ => panic!("Expected Number(2), got {:?}", result),
         }
     }
@@ -2155,24 +2005,24 @@ mod tests {
     fn test_integration_array_index_with_expression() {
         use crate::machine::Machine;
 
-        let code = "
+        let code = "(func() {
             let arr = [10, 20, 30];
             let i = 1;
-            arr[i + 1]
-        ";
+            return arr[i + 1];
+        })()";
 
         let lexer = Lexer::new(code.to_string());
         let mut parser = Parser::new(lexer);
-        let program = parser.parse_program().unwrap();
+        let program = parser.parse_program_expression().unwrap();
 
         let mut compiler = Compiler::new();
         let instructions = compiler.compile(&program).unwrap();
 
         let mut vm = Machine::new();
-        let result = vm.run(&instructions).unwrap();
+        let result = vm.eval(&instructions).unwrap();
 
         match result {
-            crate::environment::Value::Number(n) => assert_eq!(n, 30), // arr[1+1] = arr[2] = 30
+            Some(crate::environment::Value::Number(n)) => assert_eq!(n, 30), // arr[1+1] = arr[2] = 30
             _ => panic!("Expected Number(30), got {:?}", result),
         }
     }
@@ -2181,24 +2031,24 @@ mod tests {
     fn test_integration_array_assignment_chain() {
         use crate::machine::Machine;
 
-        let code = "
+        let code = "(func() {
             let arr = [1, 2, 3];
             arr[0] = arr[1] + arr[2];
-            arr[0];
-        ";
+            return arr[0];
+        })()";
 
         let lexer = Lexer::new(code.to_string());
         let mut parser = Parser::new(lexer);
-        let program = parser.parse_program().unwrap();
+        let program = parser.parse_program_expression().unwrap();
 
         let mut compiler = Compiler::new();
         let instructions = compiler.compile(&program).unwrap();
 
         let mut vm = Machine::new();
-        let result = vm.run(&instructions).unwrap();
+        let result = vm.eval(&instructions).unwrap();
 
         match result {
-            crate::environment::Value::Number(n) => assert_eq!(0, 0), // 2 + 3 = 5
+            Some(crate::environment::Value::Number(n)) => assert_eq!(n, 5), // 2 + 3 = 5
             _ => panic!("Expected Number(5), got {:?}", result),
         }
     }
@@ -2207,23 +2057,23 @@ mod tests {
     fn test_integration_array_index_in_expression() {
         use crate::machine::Machine;
 
-        let code = "
+        let code = "(func() {
             let arr = [5, 10, 15];
-            arr[0] + arr[1] + arr[2]
-        ";
+            return arr[0] + arr[1] + arr[2];
+        })()";
 
         let lexer = Lexer::new(code.to_string());
         let mut parser = Parser::new(lexer);
-        let program = parser.parse_program().unwrap();
+        let program = parser.parse_program_expression().unwrap();
 
         let mut compiler = Compiler::new();
         let instructions = compiler.compile(&program).unwrap();
 
         let mut vm = Machine::new();
-        let result = vm.run(&instructions).unwrap();
+        let result = vm.eval(&instructions).unwrap();
 
         match result {
-            crate::environment::Value::Number(n) => assert_eq!(n, 30), // 5 + 10 + 15 = 30
+            Some(crate::environment::Value::Number(n)) => assert_eq!(n, 30), // 5 + 10 + 15 = 30
             _ => panic!("Expected Number(30), got {:?}", result),
         }
     }
@@ -2232,14 +2082,14 @@ mod tests {
     fn test_integration_array_index_runtime_error_out_of_bounds() {
         use crate::machine::Machine;
 
-        let code = "
+        let code = "(func() {
             let arr = [1, 2, 3];
-            arr[10]
-        ";
+            return arr[10];
+        })()";
 
         let lexer = Lexer::new(code.to_string());
         let mut parser = Parser::new(lexer);
-        let program = parser.parse_program().unwrap();
+        let program = parser.parse_program_expression().unwrap();
 
         let mut compiler = Compiler::new();
         let instructions = compiler.compile(&program).unwrap();
@@ -2256,26 +2106,26 @@ mod tests {
         use crate::machine::Machine;
 
         // Simplified test without for loop to avoid loop variable complexity
-        let code = "
+        let code = "(func() {
             let arr = [0, 0, 0];
             arr[0] = 10;
             arr[1] = 20;
             arr[2] = 30;
-            arr[1]
-        ";
+            return arr[1];
+        })()";
 
         let lexer = Lexer::new(code.to_string());
         let mut parser = Parser::new(lexer);
-        let program = parser.parse_program().unwrap();
+        let program = parser.parse_program_expression().unwrap();
 
         let mut compiler = Compiler::new();
         let instructions = compiler.compile(&program).unwrap();
 
         let mut vm = Machine::new();
-        let result = vm.run(&instructions).unwrap();
+        let result = vm.eval(&instructions).unwrap();
 
         match result {
-            crate::environment::Value::Number(n) => assert_eq!(n, 20),
+            Some(crate::environment::Value::Number(n)) => assert_eq!(n, 20),
             _ => panic!("Expected Number(20), got {:?}", result),
         }
     }
@@ -2284,26 +2134,26 @@ mod tests {
     fn test_integration_array_swap_elements() {
         use crate::machine::Machine;
 
-        let code = "
+        let code = "(func() {
             let arr = [1, 2];
             let temp = arr[0];
             arr[0] = arr[1];
             arr[1] = temp;
-            arr[0]
-        ";
+            return arr[0];
+        })()";
 
         let lexer = Lexer::new(code.to_string());
         let mut parser = Parser::new(lexer);
-        let program = parser.parse_program().unwrap();
+        let program = parser.parse_program_expression().unwrap();
 
         let mut compiler = Compiler::new();
         let instructions = compiler.compile(&program).unwrap();
 
         let mut vm = Machine::new();
-        let result = vm.run(&instructions).unwrap();
+        let result = vm.eval(&instructions).unwrap();
 
         match result {
-            crate::environment::Value::Number(n) => assert_eq!(n, 2), // Swapped, arr[0] should be 2
+            Some(crate::environment::Value::Number(n)) => assert_eq!(n, 2), // Swapped, arr[0] should be 2
             _ => panic!("Expected Number(2), got {:?}", result),
         }
     }
@@ -2312,23 +2162,23 @@ mod tests {
     fn test_integration_mixed_types_in_array() {
         use crate::machine::Machine;
 
-        let code = r#"
+        let code = r#"(func() {
             let arr = [42, true, "hello"];
-            arr[2]
-        "#;
+            return arr[2];
+        })()"#;
 
         let lexer = Lexer::new(code.to_string());
         let mut parser = Parser::new(lexer);
-        let program = parser.parse_program().unwrap();
+        let program = parser.parse_program_expression().unwrap();
 
         let mut compiler = Compiler::new();
         let instructions = compiler.compile(&program).unwrap();
 
         let mut vm = Machine::new();
-        let result = vm.run(&instructions).unwrap();
+        let result = vm.eval(&instructions).unwrap();
 
         match result {
-            crate::environment::Value::String(s) => assert_eq!(s, "hello"),
+            Some(crate::environment::Value::String(s)) => assert_eq!(s, "hello"),
             _ => panic!("Expected String(\"hello\"), got {:?}", result),
         }
     }

@@ -26,8 +26,8 @@ impl From<PrefixOp> for UNOPS {
     /// # Examples
     ///
     /// ```
-    /// use rust_impl::ast::PrefixOp;
-    /// use rust_impl::instruction::UNOPS;
+    /// use rustphy::ast::PrefixOp;
+    /// use rustphy::instruction::UNOPS;
     ///
     /// assert_eq!(UNOPS::from(PrefixOp::Negative), UNOPS::Negative);
     /// assert_eq!(UNOPS::from(PrefixOp::Not), UNOPS::Not);
@@ -85,8 +85,8 @@ impl From<InfixOp> for BINOPS {
     /// # Examples
     ///
     /// ```
-    /// use rust_impl::ast::InfixOp;
-    /// use rust_impl::instruction::BINOPS;
+    /// use rustphy::ast::InfixOp;
+    /// use rustphy::instruction::BINOPS;
     ///
     /// assert_eq!(BINOPS::from(InfixOp::Add), BINOPS::Add);
     /// assert_eq!(BINOPS::from(InfixOp::Multiply), BINOPS::Multiply);

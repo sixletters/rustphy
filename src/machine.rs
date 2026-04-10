@@ -16,8 +16,8 @@
 //! # Example
 //!
 //! ```
-//! use rust_impl::machine::Machine;
-//! use rust_impl::instruction::Instruction;
+//! use rustphy::machine::Machine;
+//! use rustphy::instruction::Instruction;
 //!
 //! let mut vm = Machine::new();
 //! let instructions = vec![
@@ -26,8 +26,6 @@
 //! ];
 //! let result = vm.run(&instructions).unwrap();
 //! ```
-
-use serde_json::to_string;
 
 use crate::{
     environment::{BuiltinFn, Environment, Value},
@@ -90,7 +88,7 @@ impl Machine {
     /// # Examples
     ///
     /// ```
-    /// use rust_impl::machine::Machine;
+    /// use rustphy::machine::Machine;
     /// let vm = Machine::new();
     /// ```
     pub fn new() -> Self {
@@ -126,8 +124,8 @@ impl Machine {
     /// # Examples
     ///
     /// ```
-    /// use rust_impl::machine::Machine;
-    /// use rust_impl::environment::Value;
+    /// use rustphy::machine::Machine;
+    /// use rustphy::environment::Value;
     ///
     /// assert_eq!(Machine::is_truthy(&Value::Bool(true)), Ok(true));
     /// assert_eq!(Machine::is_truthy(&Value::Number(0)), Ok(false));
@@ -150,6 +148,7 @@ impl Machine {
     ///
     /// Runs the instruction at the current program counter, updating the PC
     /// after each instruction, until a `DONE` instruction is encountered.
+    /// This method is for executing programs/statements with side effects.
     ///
     /// # Arguments
     ///
@@ -157,40 +156,77 @@ impl Machine {
     ///
     /// # Returns
     ///
-    /// * `Ok(Value)` - The value on top of the operand stack when execution completes
+    /// * `Ok(())` - Program executed successfully
     /// * `Err(String)` - Runtime errors including:
     ///   - Type mismatches in operations
     ///   - Undefined variables
     ///   - Stack underflow
     ///   - Division by zero
-    ///   - Empty operand stack at completion
     ///
     /// # Examples
     ///
     /// ```
-    /// use rust_impl::machine::Machine;
-    /// use rust_impl::instruction::Instruction;
-    /// use rust_impl::environment::Value;
+    /// use rustphy::machine::Machine;
+    /// use rustphy::instruction::Instruction;
+    ///
+    /// let mut vm = Machine::new();
+    /// let instructions = vec![
+    ///     Instruction::LDCN { val: 42 },
+    ///     Instruction::ASSIGN { sym: "x".to_string() },
+    ///     Instruction::DONE,
+    /// ];
+    /// vm.run(&instructions).unwrap();
+    /// ```
+    pub fn run(&mut self, instructions: &Vec<Instruction>) -> Result<(), String> {
+        while !self.is_done {
+            self.execute(&instructions[self.pc])?;
+        }
+        Ok(())
+    }
+
+    /// Evaluates a sequence of instructions and returns the result.
+    ///
+    /// Runs the instruction at the current program counter, updating the PC
+    /// after each instruction, until a `DONE` instruction is encountered.
+    /// Returns the value left on top of the operand stack, or `None` if empty.
+    ///
+    /// # Arguments
+    ///
+    /// * `instructions` - The bytecode expression to evaluate
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(Some(Value))` - The value on top of the operand stack when execution completes
+    /// * `Ok(None)` - No value on the operand stack (undefined)
+    /// * `Err(String)` - Runtime errors including:
+    ///   - Type mismatches in operations
+    ///   - Undefined variables
+    ///   - Stack underflow
+    ///   - Division by zero
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rustphy::machine::Machine;
+    /// use rustphy::instruction::Instruction;
+    /// use rustphy::environment::Value;
     ///
     /// let mut vm = Machine::new();
     /// let instructions = vec![
     ///     Instruction::LDCN { val: 10 },
     ///     Instruction::LDCN { val: 32 },
-    ///     Instruction::BINOP { ops: rust_impl::instruction::BINOPS::Add },
+    ///     Instruction::BINOP { ops: rustphy::instruction::BINOPS::Add },
     ///     Instruction::DONE,
     /// ];
-    /// let result = vm.run(&instructions).unwrap();
-    /// assert!(matches!(result, Value::Number(42)));
+    /// let result = vm.eval(&instructions).unwrap();
+    /// assert!(matches!(result, Some(Value::Number(42))));
     /// ```
-    pub fn run(&mut self, instructions: &Vec<Instruction>) -> Result<Value, String> {
+    pub fn eval(&mut self, instructions: &Vec<Instruction>) -> Result<Option<Value>, String> {
         while !self.is_done {
             self.execute(&instructions[self.pc])?;
         }
 
-        match self.os.last() {
-            Some(val) => Ok(val.clone()),
-            None => Err("Runtime error: operand stack is empty, no value to return".to_string()),
-        }
+        Ok(self.os.last().cloned())
     }
 
     /// Executes a binary operation by popping two operands from the stack.
@@ -1095,19 +1131,63 @@ mod tests {
     }
 
     #[test]
+    fn test_run_executes_statements() {
+        // run executes statements without returning a value
+        let mut vm = Machine::new();
+        let instructions = vec![
+            Instruction::LDCN { val: 42 },
+            Instruction::ASSIGN {
+                sym: "x".to_string(),
+            },
+            Instruction::DONE,
+        ];
+        vm.run(&instructions).unwrap();
+        // Verify the assignment happened
+        let val = vm.env.borrow().get("x");
+        assert!(matches!(val, Some(Value::Number(42))));
+    }
+
+    #[test]
+    fn test_eval_returns_value() {
+        // eval evaluates an expression and returns the result
+        let mut vm = Machine::new();
+        let instructions = vec![
+            Instruction::LDCN { val: 10 },
+            Instruction::LDCN { val: 32 },
+            Instruction::BINOP { ops: BINOPS::Add },
+            Instruction::DONE,
+        ];
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(42))));
+    }
+
+    #[test]
+    fn test_eval_returns_none_when_empty() {
+        // eval returns None when stack is empty
+        let mut vm = Machine::new();
+        let instructions = vec![
+            Instruction::LDCN { val: 5 },
+            Instruction::POP,
+            Instruction::DONE,
+        ];
+        let result = vm.eval(&instructions).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
     fn test_load_constant_bool() {
         let mut vm = Machine::new();
         let instructions = vec![Instruction::LDCB { val: true }, Instruction::DONE];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Bool(true)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Bool(true))));
     }
 
     #[test]
     fn test_load_constant_number() {
         let mut vm = Machine::new();
         let instructions = vec![Instruction::LDCN { val: 42 }, Instruction::DONE];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(42)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(42))));
     }
 
     #[test]
@@ -1119,16 +1199,16 @@ mod tests {
             },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::String(s) if s == "hello world"));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::String(s)) if s == "hello world"));
     }
 
     #[test]
     fn test_load_string_literal_empty() {
         let mut vm = Machine::new();
         let instructions = vec![Instruction::LDSL { val: String::new() }, Instruction::DONE];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::String(s) if s.is_empty()));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::String(s)) if s.is_empty()));
     }
 
     #[test]
@@ -1140,8 +1220,8 @@ mod tests {
             },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::String(s) if s == "line1\nline2\ttab"));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::String(s)) if s == "line1\nline2\ttab"));
     }
 
     #[test]
@@ -1162,8 +1242,8 @@ mod tests {
             Instruction::EXITSCOPE,
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::String(s) if s == "Hello, World!"));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::String(s)) if s == "Hello, World!"));
     }
 
     #[test]
@@ -1183,8 +1263,8 @@ mod tests {
             },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::String(s) if s == "third"));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::String(s)) if s == "third"));
     }
 
     #[test]
@@ -1196,8 +1276,8 @@ mod tests {
             },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Identifier(s) if s == "x"));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Identifier(s)) if s == "x"));
     }
 
     #[test]
@@ -1209,8 +1289,8 @@ mod tests {
             Instruction::BINOP { ops: BINOPS::Add },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(42)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(42))));
     }
 
     #[test]
@@ -1222,8 +1302,8 @@ mod tests {
             Instruction::BINOP { ops: BINOPS::Minus },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(42)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(42))));
     }
 
     #[test]
@@ -1237,8 +1317,8 @@ mod tests {
             },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(42)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(42))));
     }
 
     #[test]
@@ -1252,8 +1332,8 @@ mod tests {
             },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(42)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(42))));
     }
 
     #[test]
@@ -1267,8 +1347,8 @@ mod tests {
             },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(1)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(1))));
     }
 
     #[test]
@@ -1280,8 +1360,8 @@ mod tests {
             Instruction::BINOP { ops: BINOPS::Lt },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Bool(true)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Bool(true))));
     }
 
     #[test]
@@ -1293,8 +1373,8 @@ mod tests {
             Instruction::BINOP { ops: BINOPS::Gt },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Bool(true)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Bool(true))));
     }
 
     #[test]
@@ -1306,8 +1386,8 @@ mod tests {
             Instruction::BINOP { ops: BINOPS::Eq },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Bool(true)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Bool(true))));
     }
 
     #[test]
@@ -1319,8 +1399,8 @@ mod tests {
             Instruction::BINOP { ops: BINOPS::Neq },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Bool(true)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Bool(true))));
     }
 
     #[test]
@@ -1333,8 +1413,8 @@ mod tests {
             },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(-42)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(-42))));
     }
 
     #[test]
@@ -1345,8 +1425,8 @@ mod tests {
             Instruction::UNOP { ops: UNOPS::Not },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Bool(false)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Bool(false))));
     }
 
     #[test]
@@ -1362,8 +1442,8 @@ mod tests {
             },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(42)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(42))));
     }
 
     #[test]
@@ -1375,8 +1455,8 @@ mod tests {
             Instruction::POP,
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(1)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(1))));
     }
 
     #[test]
@@ -1390,8 +1470,8 @@ mod tests {
             Instruction::LDCN { val: 99 },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(42)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(42))));
     }
 
     #[test]
@@ -1405,8 +1485,8 @@ mod tests {
             Instruction::LDCN { val: 99 },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(99)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(99))));
     }
 
     #[test]
@@ -1419,8 +1499,8 @@ mod tests {
             Instruction::LDCN { val: 42 },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(42)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(42))));
     }
 
     #[test]
@@ -1447,8 +1527,8 @@ mod tests {
             },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(10)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(10))));
     }
 
     #[test]
@@ -1478,8 +1558,8 @@ mod tests {
             // 8: Done
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(42)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(42))));
     }
 
     #[test]
@@ -1509,8 +1589,8 @@ mod tests {
             // 8: Done
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(42)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(42))));
     }
 
     #[test]
@@ -1545,8 +1625,8 @@ mod tests {
             // 10: Done
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(42)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(42))));
     }
 
     #[test]
@@ -1625,8 +1705,8 @@ mod tests {
             Instruction::BINOP { ops: BINOPS::Minus },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(22)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(22))));
     }
 
     #[test]
@@ -1650,8 +1730,8 @@ mod tests {
             },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(42)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(42))));
 
         // Verify the variable was actually assigned
         let value = vm.env.borrow().get("x").unwrap();
@@ -1691,8 +1771,8 @@ mod tests {
             },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(42)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(42))));
 
         // Verify both variables were assigned
         let x_value = vm.env.borrow().get("x").unwrap();
@@ -1724,8 +1804,8 @@ mod tests {
             Instruction::BINOP { ops: BINOPS::Add },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(42)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(42))));
 
         // Verify x was assigned
         let x_value = vm.env.borrow().get("x").unwrap();
@@ -1762,8 +1842,8 @@ mod tests {
             },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(20)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(20))));
 
         // Verify x was reassigned
         let x_value = vm.env.borrow().get("x").unwrap();
@@ -1806,8 +1886,8 @@ mod tests {
             },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(42)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(42))));
 
         // Verify both assignments worked
         let x_value = vm.env.borrow().get("x").unwrap();
@@ -1851,9 +1931,9 @@ mod tests {
             Instruction::CALL { arity: 1 },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
+        let result = vm.eval(&instructions).unwrap();
         // print should return the value it printed
-        assert!(matches!(result, Value::Number(42)));
+        assert!(matches!(result, Some(Value::Number(42))));
     }
 
     #[test]
@@ -1904,8 +1984,8 @@ mod tests {
             Instruction::CALL { arity: 1 },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::String(s) if s == "Hello, World!"));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::String(s)) if s == "Hello, World!"));
     }
 
     #[test]
@@ -1920,8 +2000,8 @@ mod tests {
             Instruction::CALL { arity: 1 },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Bool(true)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Bool(true))));
     }
 
     #[test]
@@ -1938,8 +2018,8 @@ mod tests {
             Instruction::BINOP { ops: BINOPS::Add },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(42)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(42))));
     }
 
     #[test]
@@ -1961,8 +2041,8 @@ mod tests {
             Instruction::CALL { arity: 1 },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(42)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(42))));
     }
 
     #[test]
@@ -1981,8 +2061,8 @@ mod tests {
             Instruction::CALL { arity: 1 },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(42)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(42))));
     }
 
     #[test]
@@ -2002,9 +2082,9 @@ mod tests {
             Instruction::MKARR { size: 0 }, // Create empty array
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
+        let result = vm.eval(&instructions).unwrap();
         match result {
-            Value::Array(arr) => {
+            Some(Value::Array(arr)) => {
                 assert_eq!(arr.borrow().len(), 0, "Empty array should have length 0");
             }
             _ => panic!("Expected Array value, got {:?}", result),
@@ -2019,9 +2099,9 @@ mod tests {
             Instruction::MKARR { size: 1 },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
+        let result = vm.eval(&instructions).unwrap();
         match result {
-            Value::Array(arr) => {
+            Some(Value::Array(arr)) => {
                 let borrowed = arr.borrow();
                 assert_eq!(borrowed.len(), 1);
                 match &borrowed[0] {
@@ -2043,9 +2123,9 @@ mod tests {
             Instruction::MKARR { size: 3 },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
+        let result = vm.eval(&instructions).unwrap();
         match result {
-            Value::Array(arr) => {
+            Some(Value::Array(arr)) => {
                 let borrowed = arr.borrow();
                 assert_eq!(borrowed.len(), 3);
 
@@ -2079,9 +2159,9 @@ mod tests {
             Instruction::MKARR { size: 3 },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
+        let result = vm.eval(&instructions).unwrap();
         match result {
-            Value::Array(arr) => {
+            Some(Value::Array(arr)) => {
                 let borrowed = arr.borrow();
                 assert_eq!(borrowed.len(), 3);
 
@@ -2118,9 +2198,9 @@ mod tests {
             Instruction::MKARR { size: 2 },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
+        let result = vm.eval(&instructions).unwrap();
         match result {
-            Value::Array(outer) => {
+            Some(Value::Array(outer)) => {
                 let borrowed_outer = outer.borrow();
                 assert_eq!(borrowed_outer.len(), 2);
 
@@ -2181,9 +2261,9 @@ mod tests {
             Instruction::MKARR { size: 2 },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
+        let result = vm.eval(&instructions).unwrap();
         match result {
-            Value::Array(arr) => {
+            Some(Value::Array(arr)) => {
                 let borrowed = arr.borrow();
                 assert_eq!(borrowed.len(), 2);
 
@@ -2213,9 +2293,9 @@ mod tests {
             Instruction::MKARR { size: 5 },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
+        let result = vm.eval(&instructions).unwrap();
         match result {
-            Value::Array(arr) => {
+            Some(Value::Array(arr)) => {
                 let borrowed = arr.borrow();
                 let expected = vec![10, 20, 30, 40, 50];
 
@@ -2272,8 +2352,8 @@ mod tests {
             Instruction::LDAI,
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(20)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(20))));
     }
 
     #[test]
@@ -2287,8 +2367,8 @@ mod tests {
             Instruction::LDAI,
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(42)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(42))));
     }
 
     #[test]
@@ -2303,8 +2383,8 @@ mod tests {
             Instruction::LDAI,
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(3)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(3))));
     }
 
     #[test]
@@ -2399,8 +2479,8 @@ mod tests {
             Instruction::LDAI,
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(99)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(99))));
     }
 
     #[test]
@@ -2429,8 +2509,8 @@ mod tests {
             Instruction::LDAI,
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(42)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(42))));
     }
 
     #[test]
@@ -2479,8 +2559,8 @@ mod tests {
             Instruction::LDAI,
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(20)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(20))));
     }
 
     #[test]
@@ -2551,8 +2631,8 @@ mod tests {
             Instruction::LDAI,
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(200)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(200))));
     }
 
     #[test]
@@ -2583,8 +2663,8 @@ mod tests {
             Instruction::LDAI,
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(2)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(2))));
     }
 
     #[test]
@@ -2611,8 +2691,8 @@ mod tests {
             Instruction::LDAI,
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(30)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(30))));
     }
 
     #[test]
@@ -2660,8 +2740,8 @@ mod tests {
             Instruction::LDAI,
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(21))); // 20 + 1
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(21)))); // 20 + 1
     }
 
     #[test]
@@ -2715,8 +2795,8 @@ mod tests {
     fn test_mkhash_empty() {
         let mut vm = Machine::new();
         let instructions = vec![Instruction::MKHASH { size: 0 }, Instruction::DONE];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::HashMap(_)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::HashMap(_))));
     }
 
     #[test]
@@ -2730,8 +2810,8 @@ mod tests {
             Instruction::MKHASH { size: 1 },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::HashMap(_)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::HashMap(_))));
     }
 
     #[test]
@@ -2751,8 +2831,8 @@ mod tests {
             Instruction::MKHASH { size: 2 },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::HashMap(_)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::HashMap(_))));
     }
 
     #[test]
@@ -2771,8 +2851,8 @@ mod tests {
             Instruction::MKHASH { size: 2 },
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::HashMap(_)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::HashMap(_))));
     }
 
     #[test]
@@ -2800,8 +2880,8 @@ mod tests {
             Instruction::LDAI,
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::String(s) if s == "Alice"));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::String(s)) if s == "Alice"));
     }
 
     #[test]
@@ -2825,8 +2905,8 @@ mod tests {
             Instruction::LDAI,
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::String(s) if s == "value"));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::String(s)) if s == "value"));
     }
 
     #[test]
@@ -2859,8 +2939,8 @@ mod tests {
             Instruction::LDAI,
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(42)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(42))));
     }
 
     #[test]
@@ -2897,8 +2977,8 @@ mod tests {
             Instruction::LDAI,
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(20)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(20))));
     }
 
     #[test]
@@ -2975,8 +3055,8 @@ mod tests {
             Instruction::LDAI,
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Bool(true)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Bool(true))));
     }
 
     #[test]
@@ -3020,8 +3100,8 @@ mod tests {
             Instruction::LDAI,
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::String(s) if s == "value"));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::String(s)) if s == "value"));
     }
 
     #[test]
@@ -3066,7 +3146,7 @@ mod tests {
             // The 42 should now be on stack
             Instruction::DONE,
         ];
-        let result = vm.run(&instructions).unwrap();
-        assert!(matches!(result, Value::Number(42)));
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Number(42))));
     }
 }

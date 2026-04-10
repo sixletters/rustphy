@@ -91,7 +91,7 @@ impl Value {
     ///
     /// # Examples
     /// ```
-    /// use rust_impl::environment::Value;
+    /// use rustphy::environment::Value;
     /// let val = Value::Number(42);
     /// let json = val.to_json_value();
     /// ```
@@ -156,7 +156,7 @@ impl Environment {
     ///
     /// # Examples
     /// ```
-    /// use rust_impl::environment::Environment;
+    /// use rustphy::environment::Environment;
     /// let env = Environment::new();
     /// ```
     pub fn new() -> Rc<RefCell<Self>> {
@@ -180,7 +180,7 @@ impl Environment {
     ///
     /// # Examples
     /// ```
-    /// use rust_impl::environment::Environment;
+    /// use rustphy::environment::Environment;
     /// let global = Environment::new();
     /// let local = Environment::extend(global.clone());
     /// ```
@@ -206,7 +206,7 @@ impl Environment {
     ///
     /// # Examples
     /// ```
-    /// use rust_impl::environment::{Environment, Value};
+    /// use rustphy::environment::{Environment, Value};
     /// let env = Environment::new();
     /// env.borrow_mut().set_declare("x".to_string(), Value::Number(42));
     /// let value = env.borrow().get("x");
@@ -233,7 +233,7 @@ impl Environment {
     ///
     /// # Examples
     /// ```
-    /// use rust_impl::environment::{Environment, Value};
+    /// use rustphy::environment::{Environment, Value};
     /// let env = Environment::new();
     /// env.borrow_mut().set_declare("x".to_string(), Value::Number(10));
     /// ```
@@ -258,7 +258,7 @@ impl Environment {
     ///
     /// # Examples
     /// ```
-    /// use rust_impl::environment::{Environment, Value};
+    /// use rustphy::environment::{Environment, Value};
     /// let env = Environment::new();
     /// env.borrow_mut().set_declare("x".to_string(), Value::Number(10));
     /// env.borrow_mut().set_assign("x", Value::Number(20)).unwrap();

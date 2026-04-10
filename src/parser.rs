@@ -68,6 +68,12 @@ impl Parser {
         curr_id
     }
 
+    pub fn parse_program_expression(&mut self) -> Result<Node, String> {
+        return Ok(Node::ExpressionNode(
+            self.parse_expression(Precedence::Lowest)?,
+        ));
+    }
+
     pub fn parse_program(&mut self) -> Result<Node, String> {
         // parsing a program is just like parsing a block but without the enclosing "{"
         let mut statements = vec![];
@@ -84,7 +90,7 @@ impl Parser {
         }))
     }
 
-    pub fn parse_expression(&mut self, p: Precedence) -> Result<ExpressionNode, String> {
+    fn parse_expression(&mut self, p: Precedence) -> Result<ExpressionNode, String> {
         // a * b + c -> this should be (a * b) + c
         // a + b * c  -> this has precednece on the right
         // basically the idea behind the pratt parser is this
@@ -143,7 +149,7 @@ impl Parser {
         }
     }
 
-    pub fn parse_statement(&mut self, consume_semicolon: bool) -> Result<StatementNode, String> {
+    fn parse_statement(&mut self, consume_semicolon: bool) -> Result<StatementNode, String> {
         let stmt = match self.curr_token {
             Token::Let => {
                 let let_token = self.curr_token.clone();
@@ -311,7 +317,7 @@ impl Parser {
         Ok(stmt)
     }
 
-    pub fn parse_prefix(&mut self) -> Result<ExpressionNode, String> {
+    fn parse_prefix(&mut self) -> Result<ExpressionNode, String> {
         let curr_token = self.curr_token.clone();
         match curr_token.clone() {
             Token::Ident(val) => {
@@ -542,7 +548,7 @@ impl Parser {
         }
     }
 
-    pub fn parse_infix(&mut self, left_exp: &ExpressionNode) -> Result<ExpressionNode, String> {
+    fn parse_infix(&mut self, left_exp: &ExpressionNode) -> Result<ExpressionNode, String> {
         let curr_token = self.curr_token.clone();
         self.consume_token();
         // current token at infix operator
@@ -660,10 +666,7 @@ impl Parser {
         }
     }
 
-    pub fn parse_mixfix(
-        &mut self,
-        condition_exp: &ExpressionNode,
-    ) -> Result<ExpressionNode, String> {
+    fn parse_mixfix(&mut self, condition_exp: &ExpressionNode) -> Result<ExpressionNode, String> {
         let curr_token = self.curr_token.clone();
         match curr_token {
             Token::Conditional => {

@@ -27,7 +27,7 @@ impl Lexer {
     ///
     /// # Examples
     /// ```
-    /// use rust_impl::lexer::Lexer;
+    /// use rustphy::lexer::Lexer;
     /// let lexer = Lexer::new(String::from("let x = 5;"));
     /// ```
     pub fn new(input: String) -> Self {
@@ -61,8 +61,8 @@ impl Lexer {
     ///
     /// # Examples
     /// ```
-    /// use rust_impl::lexer::Lexer;
-    /// use rust_impl::token::Token;
+    /// use rustphy::lexer::Lexer;
+    /// use rustphy::token::Token;
     ///
     /// let mut lexer = Lexer::new(String::from("let x = 5;"));
     /// assert_eq!(lexer.next_token(), Token::Let);
