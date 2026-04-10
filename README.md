@@ -460,8 +460,8 @@ This project is designed to teach:
 
 - [x] Lexer implementation
 - [x] Parser with full expression support
-- [x] Bytecode compiler
-- [x] Stack-based virtual machine
+- [ ] Bytecode compiler (bugs now, have to fix)
+- [ ] Stack-based virtual machine (bugs now, have to fix)
 - [x] Symbol table and scoping
 - [ ] Complete WASM compiler
 - [ ] WASM runtime integration
