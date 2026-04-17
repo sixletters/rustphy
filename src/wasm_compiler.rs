@@ -4,9 +4,12 @@
 //!
 
 use crate::ast::{ExpressionNode, InfixOp, Node, StatementNode};
+use crate::escape_analysis::EscapeAnalysis;
+use crate::symbol_table::{BindType, SymbolTable};
 use crate::wasm_environment::WasmRuntime;
 
 use std::collections::HashMap;
+use std::string;
 
 /// Compiler errors
 #[derive(Debug)]
@@ -33,12 +36,20 @@ pub struct Compiler<'a> {
     compiled_function_outputs: Vec<String>,
     compilation_context: CompilationContext,
     string_compilation_context: StringCompilationContext,
+    symbol_table: SymbolTable<'a>,
+    escape_analysis: EscapeAnalysis,
+    // todo: currently compilation context is cloned, in the future might
+    // be better to use rc and refcell?
+    compilation_context_lookup: HashMap<usize, CompilationContext>, // binding_id -> compilation context
 }
 
+#[derive(Clone, Debug)]
 struct CompilationContext {
-    locals: HashMap<String, u32>,
-    next_local: u32,
+    locals: Vec<usize>, // binding_id → local_index, we technically dont even need this honestly
+    escaped_locals: HashMap<usize, u32>,
+    next_escaped_variable: u32,
     parent: Option<Box<CompilationContext>>,
+    depth: usize,
 }
 
 struct StringCompilationContext {
@@ -50,17 +61,22 @@ struct StringCompilationContext {
 impl CompilationContext {
     fn new() -> Self {
         CompilationContext {
-            locals: HashMap::new(),
-            next_local: 0,
+            locals: vec![],
+            escaped_locals: HashMap::new(),
+            next_escaped_variable: 0,
             parent: None,
+            depth: 0,
         }
     }
 
     fn push_scope(&mut self) -> CompilationContext {
+        let old_depth = self.depth;
         CompilationContext {
-            locals: HashMap::new(),
-            next_local: 0,
+            locals: vec![],
+            escaped_locals: HashMap::new(),
+            next_escaped_variable: 0,
             parent: Some(Box::new(std::mem::replace(self, CompilationContext::new()))),
+            depth: old_depth + 1,
         }
     }
 
@@ -69,10 +85,18 @@ impl CompilationContext {
             *self = *parent;
         }
     }
+
+    fn is_global(&self) -> bool {
+        self.depth == 0
+    }
 }
 
 impl<'a> Compiler<'a> {
     pub fn new(root_node: &'a Node) -> Self {
+        // todo: fix this weird ass
+        let symbol_table = SymbolTable::new(root_node);
+        let mut escape_symbol_table = SymbolTable::new(root_node);
+        escape_symbol_table.build();
         Compiler {
             root_node,
             compiled_function_outputs: vec![],
@@ -82,11 +106,17 @@ impl<'a> Compiler<'a> {
                 next_data_offset: 0,
                 string_data: vec![],
             },
+            compilation_context_lookup: HashMap::new(),
+            symbol_table: symbol_table,
+            escape_analysis: EscapeAnalysis::analyze(root_node, &escape_symbol_table),
         }
     }
 
     // Call this compile first
     pub fn compile(&mut self) -> Result<String> {
+        // build the symbol table
+        self.symbol_table.build();
+
         // Create a new runtime, just a helper to build wasm code
         let mut runtime = WasmRuntime::new();
         // module header
@@ -94,7 +124,7 @@ impl<'a> Compiler<'a> {
 
         runtime.emit_line("(memory $heap (export \"memory\") 1)");
         runtime.emit_line("(global $heap_ptr (mut i32) (i32.const 1024))");
-        runtime.emit_line("(global $global_env (mut i32) (i32.const 0))");
+        runtime.emit_line("(global $global_env_ptr (mut i32) (i32.const 0))");
         runtime.emit_line("(type $function_type (func (param i32 i32) (result i32)))");
         runtime.emit_newline();
         runtime.emit_line("(table $closures 5 funcref)");
@@ -113,6 +143,7 @@ impl<'a> Compiler<'a> {
         runtime.generate_array_helpers();
 
         runtime.emit_line(&self.compile_node(self.root_node)?);
+        // add the func_def and ouputs
         for func_def in self.compiled_function_outputs.iter() {
             runtime.emit_line(func_def);
         }
@@ -124,52 +155,36 @@ impl<'a> Compiler<'a> {
         Ok(runtime.get_output().to_string())
     }
 
-    fn collect_locals_stmt(&mut self, stmt: &StatementNode) {
-        match stmt {
-            StatementNode::Block { statements, .. } => {
-                let names = Self::scan(statements);
-                for name in names {
-                    if !self.compilation_context.locals.contains_key(&name) {
-                        self.compilation_context
-                            .locals
-                            .insert(name, self.compilation_context.next_local);
-                        self.compilation_context.next_local += 1;
-                    }
-                }
+    fn collect_variables_for_scope(&mut self, scope_id: usize) {
+        // todo: Explore if its better to not make this stateful
+        // Get all bindings in this scope (including nested blocks)
+        let all_bindings = self
+            .symbol_table
+            .get_all_bindings_in_function_scope(scope_id);
+
+        // Filter out escaped bindings (they go in environment, not locals)
+        // Filter out function params and also function declarations
+        for binding_id in all_bindings {
+            let current_symbol = match self.symbol_table.get_symbol(binding_id) {
+                Some(val) => val,
+                None => continue,
+            };
+            // If its not variable declaraion, then skip
+            if !matches!(current_symbol.bind_type, BindType::VariableDeclaraion) {
+                continue;
             }
-            StatementNode::Program { statements, .. } => {
-                let stmts: Vec<Box<StatementNode>> = statements
-                    .iter()
-                    .filter_map(|node| match &**node {
-                        Node::StatementNode(val) => Some(Box::new((*val).clone())),
-                        _ => None,
-                    })
-                    .collect(); // ← Collect the iterator into a Vec
-                let names = Self::scan(&stmts);
-                for name in names {
-                    if !self.compilation_context.locals.contains_key(&name) {
-                        self.compilation_context
-                            .locals
-                            .insert(name, self.compilation_context.next_local);
-                        self.compilation_context.next_local += 1;
-                    }
-                }
+            // todo: check this logic
+            if self.escape_analysis.does_escape(binding_id) {
+                self.compilation_context
+                    .escaped_locals
+                    .insert(binding_id, self.compilation_context.next_escaped_variable);
+                self.compilation_context.next_escaped_variable += 1;
+            } else {
+                // This binding should be a WASM local
+                self.compilation_context.locals.push(binding_id);
             }
-            StatementNode::Expression { expression, .. } => match expression {
-                ExpressionNode::If {
-                    if_block,
-                    else_block,
-                    ..
-                } => {
-                    self.collect_locals_stmt(if_block);
-                    match else_block {
-                        Some(val) => self.collect_locals_stmt(val),
-                        None => {}
-                    }
-                }
-                _ => {}
-            },
-            _ => {}
+            self.compilation_context_lookup
+                .insert(binding_id, self.compilation_context.clone());
         }
     }
 
@@ -186,18 +201,27 @@ impl<'a> Compiler<'a> {
             StatementNode::Program {
                 statements,
                 implicit_return,
+                id,
                 ..
             } => {
-                self.collect_locals_stmt(node);
+                // Get the program's scope_id
+                let scope_id = self
+                    .symbol_table
+                    .get_scope_for_node(*id)
+                    .ok_or(WasmCompileError::Other("No scope for program".to_string()))?;
+
+                // Collect locals for this scope
+                self.collect_variables_for_scope(scope_id);
+
                 // temporaily export main to test in browser
                 // todo: this can actually be made to look prettier in the future
                 runtime
                     .function("$main (export \"main\")")
-                    .result("i32")
                     .body(|f| {
-                        for (name, _) in self.compilation_context.locals.iter() {
-                            // fix this
-                            f.push_inst(&format!("(local ${} i32)", name));
+                        // Declare locals using binding_ids
+                        for binding_id in self.compilation_context.locals.iter() {
+                            let symbol = self.symbol_table.get_symbol(*binding_id).unwrap();
+                            f.push_inst(&format!("(local ${} i32)", symbol.name));
                         }
                         for node in statements {
                             // todo this might be an error
@@ -236,13 +260,41 @@ impl<'a> Compiler<'a> {
                 Ok(runtime.get_output().to_string())
             }
             StatementNode::Let { value, name, .. } => {
-                let identifier_name = match name {
-                    ExpressionNode::Identifier { value, .. } => value,
-                    _ => panic!("Name must be identifier"),
-                };
-
                 let expr = self.compile_expression(value)?;
-                Ok(format!("{}\nlocal.set ${}", expr, identifier_name))
+                if let ExpressionNode::Identifier { id, .. } = name {
+                    let binding_id =
+                        self.symbol_table
+                            .resolve(*id)
+                            .ok_or(WasmCompileError::Other(
+                                "Unresolved let binding".to_string(),
+                            ))?;
+                    if self.escape_analysis.does_escape(binding_id) {
+                        let env_var_idx =
+                            match self.compilation_context.escaped_locals.get(&binding_id) {
+                                Some(val) => val,
+                                None => {
+                                    return Err(WasmCompileError::Other(
+                                        "Unable to find binding id in compilation context"
+                                            .to_string(),
+                                    ));
+                                }
+                            };
+                        if self.compilation_context.is_global() {
+                            runtime.emit_line("global.get $global_env_ptr");
+                        } else {
+                            runtime.emit_line("local.get $env_ptr");
+                        }
+                        runtime.emit_line(&format!("i32.const {}", env_var_idx));
+                        runtime.emit_line(&expr);
+                        runtime.emit_line("call $env_set");
+                        return Ok(runtime.get_output().to_string());
+                    }
+                    let symbol = self.symbol_table.get_symbol(binding_id).unwrap();
+                    return Ok(format!("{}\nlocal.set ${}", expr, symbol.name));
+                }
+                Err(WasmCompileError::Other(
+                    "Let name must be identifier".to_string(),
+                ))
             }
             StatementNode::Expression { expression, .. } => {
                 Ok(self.compile_expression(expression)?)
@@ -279,11 +331,25 @@ impl<'a> Compiler<'a> {
                 }
                 Ok("i32.const 0".to_string())
             }
-            ExpressionNode::Identifier { value, .. } => {
-                // todo: In the future we have to determine if this identifier is an escape variable etc
-                // depending on its type, we have to compile acordingly
-                // for now keep it as all local
-                Ok(format!("local.get ${}", value))
+            ExpressionNode::Identifier { value, id, .. } => {
+                let binding_id = self
+                    .symbol_table
+                    .resolve(*id)
+                    .ok_or(WasmCompileError::Other(format!("Unresolved: {}", value)))?;
+
+                if self.escape_analysis.does_escape(binding_id) {
+                    return self.generate_smart_pointer_loading(&binding_id);
+                }
+
+                // Load from WASM local
+                let symbol =
+                    self.symbol_table
+                        .get_symbol(binding_id)
+                        .ok_or(WasmCompileError::Other(format!(
+                            "No symbol for binding: {}",
+                            binding_id
+                        )))?;
+                Ok(format!("local.get ${}", symbol.name))
             }
             ExpressionNode::If {
                 condition,
@@ -292,6 +358,9 @@ impl<'a> Compiler<'a> {
                 ..
             } => {
                 let mut runtime = WasmRuntime::new();
+                // todo: this has to be the evaluation of the condition, which leaves a value on the stack
+                // for example, the integer 0 will be tagged
+                // this would return a true instead of a false,
                 runtime.emit_line(&self.compile_expression(condition)?);
                 runtime.emit_line("if\n");
                 runtime.emit_line(&self.compile_statement(if_block)?);
@@ -308,14 +377,31 @@ impl<'a> Compiler<'a> {
                 ..
             } => {
                 let mut runtime = WasmRuntime::new();
-                for arg in arguments.iter() {
-                    let expr = self.compile_expression(arg)?;
-                    runtime.emit_line(&expr);
-                }
-                // have to decide in the future if it is closure being called
-                // or if it is direct function
                 match function.as_ref() {
-                    ExpressionNode::Identifier { value, .. } => {
+                    ExpressionNode::Identifier { value, id, .. } => {
+                        let binding_id = match self.symbol_table.resolve(*id) {
+                            Some(val) => val,
+                            None => return Err(WasmCompileError::Other(String::from("OH NO"))),
+                        };
+                        let symbol = match self.symbol_table.get_symbol(binding_id) {
+                            Some(val) => val,
+                            None => return Err(WasmCompileError::Other(String::from("OH NO"))),
+                        };
+                        if matches!(symbol.bind_type, BindType::FunctionDeclaration) {
+                            // this is a direct function call as it is a function declaration
+                            if self.compilation_context.is_global() {
+                                runtime.emit_line("global.get $global_env_ptr");
+                            } else {
+                                runtime.emit_line("local.get $env_ptr");
+                            }
+                            for arg in arguments.iter() {
+                                let expr = self.compile_expression(arg)?;
+                                runtime.emit_line(&expr);
+                            }
+                        } else {
+                            // todo: handle closures
+                            todo!("handle closures here");
+                        }
                         runtime.emit_line(&format!("call ${}_direct", value));
                     }
                     _ => {}
@@ -329,10 +415,37 @@ impl<'a> Compiler<'a> {
                 ..
             } => {
                 let mut runtime = WasmRuntime::new();
+                if matches!(operator, InfixOp::Assign) {
+                    let right_expr = self.compile_expression(right)?;
+                    // Compile the right side (the value to assign)
+                    runtime.emit_line(&self.compile_expression(&right)?);
+                    match left.as_ref() {
+                        ExpressionNode::Identifier { value, id, .. } => {
+                            let binding_id =
+                                self.symbol_table
+                                    .resolve(*id)
+                                    .ok_or(WasmCompileError::Other(
+                                        "Unresolved let binding".to_string(),
+                                    ))?;
+
+                            if self.escape_analysis.does_escape(binding_id) {
+                                return self
+                                    .generate_smart_pointer_setting(&binding_id, right_expr);
+                            }
+                            runtime.emit_line(&right_expr);
+                            runtime.emit_line(&format!("local.set ${}", value));
+                        }
+                        ExpressionNode::Index { object, index, .. } => {
+                            todo!()
+                        }
+                        _ => {}
+                    }
+                    return Ok(runtime.get_output().to_string());
+                }
                 let left_expr = self.compile_expression(left)?;
                 let right_expr = self.compile_expression(right)?;
                 let op_inst = match operator {
-                    // Finish implementing other kinds of infix operators
+                    // todo: finish implementing other kinds of infix operators
                     InfixOp::Add => "call $add_values",
                     _ => "",
                 };
@@ -369,6 +482,22 @@ impl<'a> Compiler<'a> {
                 runtime.emit("call $create_string");
                 Ok(runtime.get_output().to_string())
             }
+            ExpressionNode::Ternary {
+                condition,
+                then_expr,
+                else_expr,
+                ..
+            } => {
+                let mut runtime = WasmRuntime::new();
+                // for tenary, use if (result i32) to leave value on the stack
+                runtime.emit_line(&self.compile_expression(condition)?);
+                runtime.emit_line("if (result i32)\n");
+                runtime.emit_line(&self.compile_expression(then_expr)?);
+                runtime.emit_line("else\n");
+                runtime.emit_line(&self.compile_expression(else_expr)?);
+                runtime.emit_line("end");
+                Ok(runtime.get_output().to_string())
+            }
             ExpressionNode::Array { elements, .. } => {
                 let mut runtime = WasmRuntime::new();
                 runtime.emit(&format!("i32.const {}", elements.len()));
@@ -387,36 +516,84 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    /// Scans a list of statements and extracts all `let` binding names.
-    ///
-    /// Used to determine which variables are local to a scope, allowing the VM
-    /// to pre-allocate environment slots for them.
-    ///
-    /// # Arguments
-    ///
-    /// * `statements` - The statements to scan for variable declarations
-    ///
-    /// # Returns
-    ///
-    /// A vector of variable names declared with `let` statements.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// // Given statements: let x = 1; let y = 2; return x + y;
-    /// // Returns: vec!["x", "y"]
-    /// ```
-    fn scan(statements: &Vec<Box<StatementNode>>) -> Vec<String> {
-        statements
-            .iter()
-            .filter_map(|statement| match &**statement {
-                StatementNode::Let { name, .. } => match name {
-                    ExpressionNode::Identifier { value, .. } => Some(value.clone()),
-                    _ => None,
-                },
-                _ => None,
-            })
-            .collect()
+    fn get_identifier_compilation_context(&self, binding_id: &usize) -> Result<CompilationContext> {
+        match self.compilation_context_lookup.get(binding_id) {
+            Some(val) => Ok(val.clone()),
+            None => Err(WasmCompileError::Other(String::from(
+                "binding id not found",
+            ))),
+        }
+    }
+
+    fn generate_environtment_loading(&self, binding_depth: usize) -> Result<String> {
+        let mut runtime = WasmRuntime::new();
+
+        let to_walk = self.compilation_context.depth - binding_depth;
+        if self.compilation_context.is_global() {
+            runtime.emit_line("global.get $global_env_ptr");
+        } else {
+            runtime.emit_line("local.get $env_ptr");
+        }
+
+        for _ in 0..to_walk {
+            runtime.emit_line("i32.load");
+        }
+        return Ok(runtime.get_output().to_string());
+    }
+
+    fn generate_smart_pointer_loading(&self, binding_id: &usize) -> Result<String> {
+        let mut runtime = WasmRuntime::new();
+
+        let scope_that_identifier_was_binded_in =
+            self.get_identifier_compilation_context(&binding_id)?;
+
+        runtime.emit_line(
+            &self.generate_environtment_loading(scope_that_identifier_was_binded_in.depth)?,
+        );
+
+        match scope_that_identifier_was_binded_in
+            .escaped_locals
+            .get(&binding_id)
+        {
+            Some(offset) => {
+                runtime.emit_line(&format!("i32.const {}\n", offset));
+                runtime.emit_line("call $env_get");
+                return Ok(runtime.get_output().to_string());
+            }
+            None => {
+                return Err(WasmCompileError::Other(String::from(
+                    "binding id unfound error",
+                )));
+            }
+        }
+    }
+
+    fn generate_smart_pointer_setting(&self, binding_id: &usize, value: String) -> Result<String> {
+        let mut runtime = WasmRuntime::new();
+
+        let scope_that_identifier_was_binded_in =
+            self.get_identifier_compilation_context(&binding_id)?;
+
+        runtime.emit_line(
+            &self.generate_environtment_loading(scope_that_identifier_was_binded_in.depth)?,
+        );
+
+        match scope_that_identifier_was_binded_in
+            .escaped_locals
+            .get(&binding_id)
+        {
+            Some(offset) => {
+                runtime.emit_line(&format!("i32.const {}\n", offset));
+                runtime.emit_line(&value);
+                runtime.emit_line("call $env_set");
+                return Ok(runtime.get_output().to_string());
+            }
+            None => {
+                return Err(WasmCompileError::Other(String::from(
+                    "binding id unfound error",
+                )));
+            }
+        }
     }
 
     pub fn compile_function_expression(
@@ -426,13 +603,25 @@ impl<'a> Compiler<'a> {
     ) -> Result<String> {
         match function_expression {
             ExpressionNode::Function {
-                parameters, body, ..
+                parameters,
+                body,
+                id,
+                ..
             } => {
                 // Create a new runtime, just a helper to build wasm code
                 let mut runtime = WasmRuntime::new();
 
                 // Push scope on the compilation_context
-                self.compilation_context.push_scope();
+                self.compilation_context = self.compilation_context.push_scope();
+
+                // Get the function's id
+                let scope_id = self
+                    .symbol_table
+                    .get_scope_for_node(*id)
+                    .ok_or(WasmCompileError::Other("No scope for function".to_string()))?;
+
+                // Collect locals for this scope
+                self.collect_variables_for_scope(scope_id);
 
                 // For functions we have to generate two different functions
                 // mainly identifier_direct and identifier_closure
@@ -450,8 +639,25 @@ impl<'a> Compiler<'a> {
                 // Generation of direct functions
                 runtime
                     .function(&format!("${}_direct", function_identifier))
+                    .param("$env_ptr", "i32")
                     .params(&params)
                     .body(|f| {
+                        // Declare the local variables
+                        for binding_id in self.compilation_context.locals.iter() {
+                            let symbol = self.symbol_table.get_symbol(*binding_id).unwrap();
+                            f.push_inst(&format!("(local ${} i32)", symbol.name));
+                        }
+
+                        // to make it consistent throughout, all functions will create their own env and
+                        // extend it, and then set the env_ptr inherited as the parent
+                        f.push_inst("local.get $env_ptr");
+                        f.push_inst(&format!(
+                            "i32.const {}",
+                            self.compilation_context.escaped_locals.len()
+                        ));
+                        f.push_inst("call $create_env");
+
+                        // todo: this may thrown an error sometimes
                         let _ = self.compile_statement(&body).map(|u| {
                             f.push_inst(&u);
                         });
@@ -464,7 +670,7 @@ impl<'a> Compiler<'a> {
 
                 let mut runtime = WasmRuntime::new();
                 // Generation of closure
-                self.compilation_context.push_scope();
+                self.compilation_context = self.compilation_context.push_scope();
                 runtime
                     .func(&format!("${}_closure", function_identifier))
                     .param("$env_ptr", "i32")
@@ -479,7 +685,6 @@ impl<'a> Compiler<'a> {
                         });
                         f.push_inst(&format!("call ${}_direct", function_identifier));
                     })
-                    .result("i32")
                     .build();
                 self.compiled_function_outputs
                     .push(runtime.get_output().to_string());

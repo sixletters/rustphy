@@ -1,23 +1,25 @@
 // Core modules
 pub mod ast;
 pub mod bytecode_compiler;
-pub mod compiler;
 pub mod environment;
+pub mod escape_analysis;
 pub mod instruction;
 pub mod lexer;
 pub mod machine;
 pub mod parser;
+pub mod repl;
 pub mod symbol_table;
 pub mod token;
+pub mod wasm_compiler;
 pub mod wasm_environment;
 
 // Re-export commonly used types for easier API access
 pub use ast::{ExpressionNode, Node, StatementNode};
 pub use bytecode_compiler::Compiler as BytecodeCompiler;
-pub use compiler::Compiler as WasmCompiler;
 pub use lexer::Lexer;
 pub use machine::Machine;
 pub use parser::Parser;
+pub use wasm_compiler::Compiler as WasmCompiler;
 
 // WASM bindings (only compiled when targeting wasm32)
 #[cfg(target_arch = "wasm32")]

@@ -103,6 +103,26 @@ impl Machine {
         }
     }
 
+    /// Resets the execution state while preserving the environment.
+    ///
+    /// This is useful for REPL scenarios where you want to keep variables
+    /// between evaluations but reset the machine's execution state.
+    ///
+    /// Resets:
+    /// - Operand stack (os)
+    /// - Runtime stack (rts)
+    /// - Program counter (pc)
+    /// - Done flag (is_done)
+    ///
+    /// Preserves:
+    /// - Environment (variables and their values)
+    pub fn reset_state(&mut self) {
+        self.os.clear();
+        self.rts.clear();
+        self.pc = 0;
+        self.is_done = false;
+    }
+
     /// Determines if a value is truthy in a boolean context.
     ///
     /// Truthiness rules:

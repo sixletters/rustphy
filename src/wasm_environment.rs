@@ -799,6 +799,7 @@ impl WasmRuntime {
     // - parent_ptr = 0 means global/top-level scope
     // - var_count  = number of slots allocated in this frame
     // - variables are accessed by index (0-based) relative to this frame
+    // todo: the parent ptr right now is not being used at all
 
     pub fn generate_env_helpers(&mut self) {
         self.emit_comment("Environment Helpers (lexical scope chains)");

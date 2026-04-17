@@ -1,6 +1,7 @@
+use rustphy::repl::Repl;
 use rustphy::{VERSION, compile_bytecode, compile_wasm, parse, run};
 use std::fs;
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 use std::path::PathBuf;
 
 #[derive(Debug)]
@@ -10,6 +11,7 @@ struct Args {
 
 #[derive(Debug)]
 enum Command {
+    Repl,
     Run {
         file: Option<PathBuf>,
     },
@@ -35,6 +37,7 @@ fn parse_args() -> Result<Args, String> {
 
     let command = match args.next() {
         Some(cmd) => match cmd.as_str() {
+            "repl" => Command::Repl,
             "run" => {
                 let file = args.next().map(PathBuf::from);
                 Command::Run { file }
@@ -59,7 +62,7 @@ fn parse_args() -> Result<Args, String> {
             "help" | "-h" | "--help" => Command::Help,
             _ => return Err(format!("Unknown command: {}", cmd)),
         },
-        None => Command::Help,
+        None => Command::Repl,
     };
 
     Ok(Args { command })
@@ -80,6 +83,53 @@ fn read_source(file: Option<PathBuf>) -> Result<String, String> {
     }
 }
 
+fn run_repl() {
+    let mut repl = Repl::new();
+
+    println!("Rustphy {} REPL", VERSION);
+    println!("Type 'exit' or press Ctrl+D to quit\n");
+
+    loop {
+        // Print prompt
+        print!("> ");
+        io::stdout().flush().unwrap();
+
+        // Read line from stdin
+        let mut input = String::new();
+        match io::stdin().read_line(&mut input) {
+            Ok(0) => {
+                // EOF (Ctrl+D)
+                println!("\nBye!");
+                break;
+            }
+            Ok(_) => {
+                let input = input.trim();
+
+                // Check for exit command
+                if input == "exit" || input == "quit" {
+                    println!("Bye!");
+                    break;
+                }
+
+                // Skip empty lines
+                if input.is_empty() {
+                    continue;
+                }
+
+                // Evaluate the input
+                match repl.eval_line(input) {
+                    Ok(result) => println!("{}", result),
+                    Err(e) => eprintln!("Error: {}", e),
+                }
+            }
+            Err(e) => {
+                eprintln!("Error reading input: {}", e);
+                break;
+            }
+        }
+    }
+}
+
 fn print_help() {
     println!("Rustphy {}", VERSION);
     println!();
@@ -87,6 +137,8 @@ fn print_help() {
     println!("    rustphy <COMMAND> [OPTIONS]");
     println!();
     println!("COMMANDS:");
+    println!("    repl                    Start interactive REPL (default if no command given)");
+    println!();
     println!("    run [FILE]              Run a Rustphy program");
     println!("                            If no file is specified, reads from stdin");
     println!();
@@ -101,6 +153,8 @@ fn print_help() {
     println!("    help                    Print this help message");
     println!();
     println!("EXAMPLES:");
+    println!("    rustphy");
+    println!("    rustphy repl");
     println!("    rustphy run script.gph");
     println!("    echo 'let x = 5; print(x);' | rustphy run");
     println!("    rustphy parse script.gph");
@@ -119,6 +173,10 @@ fn main() {
     };
 
     let result = match args.command {
+        Command::Repl => {
+            run_repl();
+            return;
+        }
         Command::Help => {
             print_help();
             return;
