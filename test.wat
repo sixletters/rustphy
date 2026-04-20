@@ -510,34 +510,57 @@
 )
 
 (func $main (export "main")
+   (local $other i32)
    (local $z i32)
+   global.get $global_env_ptr
+   i32.const 1
+   call $create_env
+   global.set $global_env_ptr
    global.get $global_env_ptr
    i32.const 0
    i32.const 1
    call $tag_immediate
    call $env_set
+   i32.const 0
    global.get $global_env_ptr
+   call $create_closure
+   local.set $other
+   local.get $other
    i32.const 2
-   call $tag_immediate
+   call $create_arg
+   i32.const 0
    i32.const 5
    call $tag_immediate
-   call $test_direct
+   call $arg_set
+   i32.const 1
+   i32.const 10
+   call $tag_immediate
+   call $arg_set
+   call $call_closure
    local.set $z
 )
 
+(elem (table $closures) (i32.const 0) func $test_closure )
 (func $test_direct (param $env_ptr i32) (param $y i32) (param $z i32) (result i32)
    local.get $env_ptr
    i32.const 0
    call $create_env
-   local.get $y
-   local.get $z
-   call $add_values
    local.get $env_ptr
-   i32.load
-   i32.const 0
-   call $env_get
-   call $add_values
-   return
+i32.load
+
+i32.const 0
+
+call $env_get
+
+local.get $y
+call $add_values
+
+local.get $z
+call $add_values
+
+return
+
+
 )
 
 (func $test_closure (param $env_ptr i32) (param $arg_struct_ptr i32) (result i32)
@@ -550,4 +573,5 @@
    call $arg_get
    call $test_direct
 )
+
 )

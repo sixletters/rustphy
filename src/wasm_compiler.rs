@@ -9,7 +9,6 @@ use crate::symbol_table::{BindType, SymbolTable};
 use crate::wasm_environment::WasmRuntime;
 
 use std::collections::HashMap;
-use std::string;
 
 /// Compiler errors
 #[derive(Debug)]
@@ -36,6 +35,10 @@ pub struct Compiler<'a> {
     compiled_function_outputs: Vec<String>,
     compilation_context: CompilationContext,
     string_compilation_context: StringCompilationContext,
+    // todo: make this cleaner and more optimized
+    closures_to_register: Vec<String>,
+    function_lookup_map: HashMap<String, usize>,
+    closure_idx: usize,
     symbol_table: SymbolTable<'a>,
     escape_analysis: EscapeAnalysis,
     // todo: currently compilation context is cloned, in the future might
@@ -100,7 +103,10 @@ impl<'a> Compiler<'a> {
         Compiler {
             root_node,
             compiled_function_outputs: vec![],
+            closures_to_register: vec![],
             compilation_context: CompilationContext::new(),
+            closure_idx: 0,
+            function_lookup_map: HashMap::new(),
             string_compilation_context: StringCompilationContext {
                 collected_string_literals: HashMap::new(),
                 next_data_offset: 0,
@@ -143,6 +149,11 @@ impl<'a> Compiler<'a> {
         runtime.generate_array_helpers();
 
         runtime.emit_line(&self.compile_node(self.root_node)?);
+
+        runtime.emit_line(&format!(
+            "(elem (table $closures) (i32.const 0) func {} )",
+            self.closures_to_register.join(" ")
+        ));
         // add the func_def and ouputs
         for func_def in self.compiled_function_outputs.iter() {
             runtime.emit_line(func_def);
@@ -198,12 +209,7 @@ impl<'a> Compiler<'a> {
     pub fn compile_statement(&mut self, node: &StatementNode) -> Result<String> {
         let mut runtime = WasmRuntime::new();
         match node {
-            StatementNode::Program {
-                statements,
-                implicit_return,
-                id,
-                ..
-            } => {
+            StatementNode::Program { statements, id, .. } => {
                 // Get the program's scope_id
                 let scope_id = self
                     .symbol_table
@@ -223,6 +229,14 @@ impl<'a> Compiler<'a> {
                             let symbol = self.symbol_table.get_symbol(*binding_id).unwrap();
                             f.push_inst(&format!("(local ${} i32)", symbol.name));
                         }
+                        f.push_inst("global.get $global_env_ptr");
+                        f.push_inst(&format!(
+                            "i32.const {}",
+                            self.compilation_context.escaped_locals.len()
+                        ));
+                        f.push_inst("call $create_env");
+                        f.push_inst("global.set $global_env_ptr");
+
                         for node in statements {
                             // todo this might be an error
                             let compiled_statement = match &**node {
@@ -236,18 +250,6 @@ impl<'a> Compiler<'a> {
                                     f.push_inst(line);
                                 }
                             }
-                        }
-                        match implicit_return {
-                            Some(val) => {
-                                // could be an error here
-                                let expr = self.compile_expression(val).unwrap();
-                                for line in expr.lines() {
-                                    if !line.trim().is_empty() {
-                                        f.push_inst(line);
-                                    }
-                                }
-                            }
-                            None => {}
                         }
                     })
                     .build();
@@ -311,7 +313,7 @@ impl<'a> Compiler<'a> {
                 identifier, func, ..
             } => match (identifier, func) {
                 (ExpressionNode::Identifier { value, .. }, ExpressionNode::Function { .. }) => {
-                    self.compile_function_expression(value.to_string(), func)
+                    self.compile_function_implementations(value.to_string(), func)
                 }
                 _ => Ok(String::new()),
             },
@@ -336,6 +338,30 @@ impl<'a> Compiler<'a> {
                     .symbol_table
                     .resolve(*id)
                     .ok_or(WasmCompileError::Other(format!("Unresolved: {}", value)))?;
+
+                match self.symbol_table.get_symbol(binding_id) {
+                    Some(val) => {
+                        if matches!(val.bind_type, BindType::FunctionDeclaration) {
+                            // todo: Make this way way nicer
+                            // handle assignment of function declaration
+                            let mut runtime = WasmRuntime::new();
+                            // todo: make the -1 cleaner in the future
+                            let func_declr_idx = match self.function_lookup_map.get(value) {
+                                Some(val) => val,
+                                None => return Err(WasmCompileError::Other(String::from("OH NO"))),
+                            };
+                            runtime.emit_line(&format!("i32.const {}", func_declr_idx));
+                            if self.compilation_context.is_global() {
+                                runtime.emit_line("global.get $global_env_ptr");
+                            } else {
+                                runtime.emit_line("local.get $env_ptr");
+                            }
+                            runtime.emit_line("call $create_closure");
+                            return Ok(runtime.get_output().to_string());
+                        }
+                    }
+                    None => {}
+                }
 
                 if self.escape_analysis.does_escape(binding_id) {
                     return self.generate_smart_pointer_loading(&binding_id);
@@ -388,7 +414,6 @@ impl<'a> Compiler<'a> {
                             None => return Err(WasmCompileError::Other(String::from("OH NO"))),
                         };
                         if matches!(symbol.bind_type, BindType::FunctionDeclaration) {
-                            // this is a direct function call as it is a function declaration
                             if self.compilation_context.is_global() {
                                 runtime.emit_line("global.get $global_env_ptr");
                             } else {
@@ -398,11 +423,19 @@ impl<'a> Compiler<'a> {
                                 let expr = self.compile_expression(arg)?;
                                 runtime.emit_line(&expr);
                             }
+                            runtime.emit_line(&format!("call ${}_direct", value));
                         } else {
-                            // todo: handle closures
-                            todo!("handle closures here");
+                            runtime.emit_line(&self.compile_expression(function)?);
+                            runtime.emit_line(&format!("i32.const {}", arguments.len()));
+                            runtime.emit_line("call $create_arg");
+                            for (i, arg) in arguments.iter().enumerate() {
+                                runtime.emit(&format!("i32.const {}", i));
+                                let expr = self.compile_expression(arg)?;
+                                runtime.emit_line(&expr);
+                                runtime.emit_line("call $arg_set");
+                            }
+                            runtime.emit_line("call $call_closure");
                         }
-                        runtime.emit_line(&format!("call ${}_direct", value));
                     }
                     _ => {}
                 }
@@ -512,6 +545,21 @@ impl<'a> Compiler<'a> {
                 }
                 Ok(runtime.get_output().to_string())
             }
+            ExpressionNode::Function { .. } => {
+                // Since this is a function expression, we have to create a closure here and return it.
+                // todo: optimize so that this doesnt happen for function declarations
+                self.compile_function_implementations(String::from("anonymous"), node)?;
+                let mut runtime = WasmRuntime::new();
+                // todo: make the -1 cleaner in the future
+                runtime.emit_line(&format!("i32.const {}", self.closure_idx - 1));
+                if self.compilation_context.is_global() {
+                    runtime.emit_line("global.get $global_env_ptr");
+                } else {
+                    runtime.emit_line("local.get $env_ptr");
+                }
+                runtime.emit_line("call $create_closure");
+                Ok(runtime.get_output().to_string())
+            }
             _ => Ok(String::new()),
         }
     }
@@ -525,7 +573,7 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn generate_environtment_loading(&self, binding_depth: usize) -> Result<String> {
+    fn generate_environment_loading(&self, binding_depth: usize) -> Result<String> {
         let mut runtime = WasmRuntime::new();
 
         let to_walk = self.compilation_context.depth - binding_depth;
@@ -548,7 +596,7 @@ impl<'a> Compiler<'a> {
             self.get_identifier_compilation_context(&binding_id)?;
 
         runtime.emit_line(
-            &self.generate_environtment_loading(scope_that_identifier_was_binded_in.depth)?,
+            &self.generate_environment_loading(scope_that_identifier_was_binded_in.depth)?,
         );
 
         match scope_that_identifier_was_binded_in
@@ -575,7 +623,7 @@ impl<'a> Compiler<'a> {
             self.get_identifier_compilation_context(&binding_id)?;
 
         runtime.emit_line(
-            &self.generate_environtment_loading(scope_that_identifier_was_binded_in.depth)?,
+            &self.generate_environment_loading(scope_that_identifier_was_binded_in.depth)?,
         );
 
         match scope_that_identifier_was_binded_in
@@ -596,99 +644,124 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    pub fn compile_function_expression(
+    pub fn compile_direct_function(
+        &mut self,
+        function_identifier: String,
+        function_expression: &ExpressionNode,
+    ) -> Result<String> {
+        if let ExpressionNode::Function {
+            parameters, body, ..
+        } = function_expression
+        {
+            // Create a new runtime, just a helper to build wasm code
+            let mut runtime = WasmRuntime::new();
+
+            // For functions we have to generate two different functions
+            // mainly identifier_direct and identifier_closure
+            // Generate direct
+            let params: Vec<(String, String)> = parameters
+                .iter()
+                .filter_map(|f| match f.as_ref() {
+                    ExpressionNode::Identifier { value, .. } => {
+                        Some((format!("${}", value), "i32".to_string()))
+                    }
+                    _ => None,
+                })
+                .collect();
+
+            // Generation of direct functions
+            runtime
+                .function(&format!("${}_direct", function_identifier))
+                .param("$env_ptr", "i32")
+                .params(&params)
+                .body(|f| {
+                    // Declare the local variables
+                    for binding_id in self.compilation_context.locals.iter() {
+                        let symbol = self.symbol_table.get_symbol(*binding_id).unwrap();
+                        f.push_inst(&format!("(local ${} i32)", symbol.name));
+                    }
+
+                    // to make it consistent throughout, all functions will create their own env and
+                    // extend it, and then set the env_ptr inherited as the parent
+                    f.push_inst("local.get $env_ptr");
+                    f.push_inst(&format!(
+                        "i32.const {}",
+                        self.compilation_context.escaped_locals.len()
+                    ));
+                    f.push_inst("call $create_env");
+
+                    // todo: this may thrown an error sometimes
+                    let _ = self.compile_statement(&body).map(|u| {
+                        f.push_inst(&u);
+                    });
+                })
+                .result("i32")
+                .build();
+
+            return Ok(runtime.get_output().to_string());
+        }
+        Err(WasmCompileError::Other(String::from(
+            "Non function node given",
+        )))
+    }
+
+    fn compile_closure_function(
+        &mut self,
+        function_identifier: String,
+        function_expression: &ExpressionNode,
+    ) -> Result<String> {
+        if let ExpressionNode::Function { parameters, .. } = function_expression {
+            let mut runtime = WasmRuntime::new();
+            runtime
+                .func(&format!("${}_closure", function_identifier))
+                .param("$env_ptr", "i32")
+                .param("$arg_struct_ptr", "i32")
+                .result("i32")
+                .body(|f| {
+                    f.push_inst("local.get $env_ptr");
+                    for i in 0..parameters.len() {
+                        f.push_inst("local.get $arg_struct_ptr");
+                        f.push_inst(&format!("i32.const {}", i));
+                        f.push_inst("call $arg_get");
+                    }
+                    f.push_inst(&format!("call ${}_direct", function_identifier));
+                })
+                .build();
+            self.closures_to_register
+                .push(format!("${}_closure", function_identifier));
+            return Ok(runtime.get_output().to_string());
+        }
+        Err(WasmCompileError::Other(String::from(
+            "Non function node given",
+        )))
+    }
+
+    pub fn compile_function_implementations(
         &mut self,
         function_identifier: String,
         function_expression: &ExpressionNode,
     ) -> Result<String> {
         match function_expression {
-            ExpressionNode::Function {
-                parameters,
-                body,
-                id,
-                ..
-            } => {
-                // Create a new runtime, just a helper to build wasm code
-                let mut runtime = WasmRuntime::new();
-
+            ExpressionNode::Function { id, .. } => {
                 // Push scope on the compilation_context
                 self.compilation_context = self.compilation_context.push_scope();
-
                 // Get the function's id
                 let scope_id = self
                     .symbol_table
                     .get_scope_for_node(*id)
                     .ok_or(WasmCompileError::Other("No scope for function".to_string()))?;
-
-                // Collect locals for this scope
                 self.collect_variables_for_scope(scope_id);
 
-                // For functions we have to generate two different functions
-                // mainly identifier_direct and identifier_closure
-                // Generate direct
-                let params: Vec<(String, String)> = parameters
-                    .iter()
-                    .filter_map(|f| match f.as_ref() {
-                        ExpressionNode::Identifier { value, .. } => {
-                            Some((format!("${}", value), "i32".to_string()))
-                        }
-                        _ => None,
-                    })
-                    .collect();
-
-                // Generation of direct functions
-                runtime
-                    .function(&format!("${}_direct", function_identifier))
-                    .param("$env_ptr", "i32")
-                    .params(&params)
-                    .body(|f| {
-                        // Declare the local variables
-                        for binding_id in self.compilation_context.locals.iter() {
-                            let symbol = self.symbol_table.get_symbol(*binding_id).unwrap();
-                            f.push_inst(&format!("(local ${} i32)", symbol.name));
-                        }
-
-                        // to make it consistent throughout, all functions will create their own env and
-                        // extend it, and then set the env_ptr inherited as the parent
-                        f.push_inst("local.get $env_ptr");
-                        f.push_inst(&format!(
-                            "i32.const {}",
-                            self.compilation_context.escaped_locals.len()
-                        ));
-                        f.push_inst("call $create_env");
-
-                        // todo: this may thrown an error sometimes
-                        let _ = self.compile_statement(&body).map(|u| {
-                            f.push_inst(&u);
-                        });
-                    })
-                    .result("i32")
-                    .build();
-                self.compiled_function_outputs
-                    .push(runtime.get_output().to_string());
+                let direct_function =
+                    self.compile_direct_function(function_identifier.clone(), function_expression)?;
+                let closure_function = self
+                    .compile_closure_function(function_identifier.clone(), function_expression)?;
+                self.compiled_function_outputs.push(direct_function);
+                self.compiled_function_outputs.push(closure_function);
                 self.compilation_context.pop_scope();
-
-                let mut runtime = WasmRuntime::new();
-                // Generation of closure
-                self.compilation_context = self.compilation_context.push_scope();
-                runtime
-                    .func(&format!("${}_closure", function_identifier))
-                    .param("$env_ptr", "i32")
-                    .param("$arg_struct_ptr", "i32")
-                    .result("i32")
-                    .body(|f| {
-                        f.push_inst("local.get $env_ptr");
-                        params.iter().enumerate().for_each(|(i, _)| {
-                            f.push_inst("local.get $arg_struct_ptr");
-                            f.push_inst(&format!("i32.const {}", i));
-                            f.push_inst("call $arg_get");
-                        });
-                        f.push_inst(&format!("call ${}_direct", function_identifier));
-                    })
-                    .build();
-                self.compiled_function_outputs
-                    .push(runtime.get_output().to_string());
-                self.compilation_context.pop_scope();
+                self.function_lookup_map
+                    .insert(function_identifier, self.closure_idx);
+                self.closure_idx += 1;
                 Ok(String::new())
             }
             _ => Err(WasmCompileError::Other(String::from(

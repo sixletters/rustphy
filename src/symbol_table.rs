@@ -1,6 +1,6 @@
 use crate::ast::{ExpressionNode, Node, StatementNode};
 use serde::Serialize;
-use std::{cell::RefCell, collections::HashMap, io::SeekFrom, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 #[derive(Clone)]
 enum ScopeType {
@@ -21,7 +21,7 @@ pub struct Scope {
     pub id: usize,
     parent: Option<usize>,
     pub symbols: HashMap<String, Symbol>,
-    pub scope_type: ScopeType,
+    scope_type: ScopeType,
     pub children: Vec<usize>, // children scope IDs
 }
 
