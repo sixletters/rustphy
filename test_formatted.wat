@@ -12,8 +12,7 @@
   (global (;3;) (mut i32) i32.const 1)
   (global (;4;) (mut i32) i32.const 0)
   (export "memory" (memory 0))
-  (export "main" (func 32))
-  (elem (;0;) (i32.const 0) func 34)
+  (export "main" (func 34))
   (func (;0;) (type 1) (param i32) (result i32)
     (local i32)
     global.get 0
@@ -211,7 +210,7 @@
     i32.add
     i32.load
   )
-  (func (;22;) (type 2) (param i32 i32 i32)
+  (func (;22;) (type 3) (param i32 i32 i32) (result i32)
     local.get 0
     i32.const 8
     local.get 1
@@ -221,6 +220,7 @@
     i32.add
     local.get 2
     i32.store
+    local.get 2
   )
   (func (;23;) (type 0) (param i32 i32) (result i32)
     local.get 0
@@ -411,57 +411,92 @@
     i32.store
     local.get 0
   )
-  (func (;32;) (type 4)
-    (local i32 i32)
-    global.get 1
-    i32.const 1
-    call 20
-    global.set 1
-    global.get 1
-    i32.const 0
-    i32.const 1
-    call 6
-    call 22
-    i32.const 0
-    global.get 1
-    call 14
-    local.set 0
-    local.get 0
-    i32.const 2
-    call 10
-    i32.const 0
-    i32.const 5
-    call 6
-    call 11
-    i32.const 1
-    i32.const 10
-    call 6
-    call 11
-    call 15
-    local.set 1
-  )
-  (func (;33;) (type 3) (param i32 i32 i32) (result i32)
-    local.get 0
-    i32.const 0
-    call 20
+  (func (;32;) (type 0) (param i32 i32) (result i32)
+    (local i32)
     local.get 0
     i32.load
-    i32.const 0
-    call 21
-    local.get 1
-    call 23
+    local.set 2
     local.get 2
-    call 23
-    return
+    global.get 3
+    i32.eq
+    if (result i32) ;; label = @1
+      local.get 0
+      local.get 1
+      call 30
+    else
+      i32.const 0
+    end
   )
-  (func (;34;) (type 0) (param i32 i32) (result i32)
+  (func (;33;) (type 3) (param i32 i32 i32) (result i32)
+    (local i32)
     local.get 0
-    local.get 1
+    i32.load
+    local.set 3
+    local.get 3
+    global.get 3
+    i32.eq
+    if (result i32) ;; label = @1
+      local.get 0
+      local.get 1
+      local.get 2
+      call 31
+    else
+      local.get 0
+    end
+  )
+  (func (;34;) (type 4)
+    (local i32 i32 i32)
+    global.get 1
     i32.const 0
-    call 12
-    local.get 1
-    i32.const 1
-    call 12
-    call 33
+    call 20
+    global.set 1
+    i32.const 0
+    call 6
+    local.set 0
+    i32.const 3
+    call 6
+    local.set 1
+    block ;; label = @1
+      loop ;; label = @2
+        i32.const 1
+        call 6
+        call 7
+        i32.eqz
+        br_if 1 (;@1;)
+        i32.const 0
+        call 6
+        local.set 2
+        block ;; label = @3
+          loop ;; label = @4
+            local.get 2
+            i32.const 5
+            call 6
+            call 16
+            call 7
+            i32.eqz
+            br_if 1 (;@3;)
+            local.get 2
+            i32.const 5
+            call 6
+            call 23
+            local.set 2
+            local.get 2
+            drop
+            br 0 (;@4;)
+          end
+        end
+        local.get 2
+        i32.const 5
+        call 6
+        call 17
+        call 7
+        if ;; label = @3
+          br 2 (;@1;)
+        end
+        i32.const 0
+        drop
+        br 0 (;@2;)
+      end
+    end
   )
 )

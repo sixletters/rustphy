@@ -265,7 +265,7 @@
    i32.add
    i32.load
 )
-(func $env_set (param $env_ptr i32) (param $index i32) (param $value i32)
+(func $env_set (param $env_ptr i32) (param $index i32) (param $value i32) (result i32)
    ;; Address = env_ptr + 8 + index * 4
    local.get $env_ptr
    i32.const 8
@@ -276,6 +276,7 @@
    i32.add
    local.get $value
    i32.store
+   local.get $value
 )
 
 ;; Arithmetic Operations on Tagged Values
@@ -508,70 +509,106 @@
    ;; Return arr_ptr for chaining
    local.get $arr_ptr
 )
+(func $subscript_get (param $obj_ptr i32) (param $idx i32) (result i32)
+   (local $type_tag i32)
+   ;; Load type tag from object (offset 0)
+   local.get $obj_ptr
+   i32.load
+   local.set $type_tag
+   
+   ;; Check if it's an array (TYPE_ARRAY = 1)
+   local.get $type_tag
+   global.get $TYPE_ARRAY
+   i32.eq
+   if (result i32)
+      local.get $obj_ptr
+      local.get $idx
+      call $array_get
+   else
+      ;; TODO: add hashmap support
+      ;; For now, return 0 for non-array objects
+      i32.const 0
+   end
+)
+(func $subscript_set (param $obj_ptr i32) (param $idx i32) (param $val i32) (result i32)
+   (local $type_tag i32)
+   ;; Load type tag from object (offset 0)
+   local.get $obj_ptr
+   i32.load
+   local.set $type_tag
+   
+   ;; Check if it's an array (TYPE_ARRAY = 1)
+   local.get $type_tag
+   global.get $TYPE_ARRAY
+   i32.eq
+   if (result i32)
+      local.get $obj_ptr
+      local.get $idx
+      local.get $val
+      call $array_set
+   else
+      ;; TODO: add hashmap support
+      ;; For now, return the object pointer unchanged
+      local.get $obj_ptr
+   end
+)
 
 (func $main (export "main")
-   (local $other i32)
+   (local $x i32)
+   (local $y i32)
    (local $z i32)
    global.get $global_env_ptr
-   i32.const 1
+   i32.const 0
    call $create_env
    global.set $global_env_ptr
-   global.get $global_env_ptr
    i32.const 0
+   call $tag_immediate
+   local.set $x
+   i32.const 3
+   call $tag_immediate
+   local.set $y
+   (block $break_1
+   (loop $continue_1
    i32.const 1
    call $tag_immediate
-   call $env_set
+   call $untag_immediate
+   i32.eqz
+   br_if $break_1
    i32.const 0
-   global.get $global_env_ptr
-   call $create_closure
-   local.set $other
-   local.get $other
-   i32.const 2
-   call $create_arg
-   i32.const 0
+   call $tag_immediate
+   local.set $z
+   (block $break_2
+   (loop $continue_2
+   local.get $z
    i32.const 5
    call $tag_immediate
-   call $arg_set
-   i32.const 1
-   i32.const 10
+   call $lt_values
+   call $untag_immediate
+   i32.eqz
+   br_if $break_2
+   local.get $z
+   i32.const 5
    call $tag_immediate
-   call $arg_set
-   call $call_closure
+   call $add_values
    local.set $z
-)
-
-(elem (table $closures) (i32.const 0) func $test_closure )
-(func $test_direct (param $env_ptr i32) (param $y i32) (param $z i32) (result i32)
-   local.get $env_ptr
+   local.get $z
+   drop
+   br $continue_2
+   )
+   )
+   local.get $z
+   i32.const 5
+   call $tag_immediate
+   call $gt_values
+   call $untag_immediate
+   if
+   br $break_1
+   end
    i32.const 0
-   call $create_env
-   local.get $env_ptr
-i32.load
-
-i32.const 0
-
-call $env_get
-
-local.get $y
-call $add_values
-
-local.get $z
-call $add_values
-
-return
-
-
-)
-
-(func $test_closure (param $env_ptr i32) (param $arg_struct_ptr i32) (result i32)
-   local.get $env_ptr
-   local.get $arg_struct_ptr
-   i32.const 0
-   call $arg_get
-   local.get $arg_struct_ptr
-   i32.const 1
-   call $arg_get
-   call $test_direct
+   drop
+   br $continue_1
+   )
+   )
 )
 
 )

@@ -861,6 +861,7 @@ impl WasmRuntime {
             .param("$env_ptr", "i32")
             .param("$index", "i32")
             .param("$value", "i32")
+            .result("i32")
             .body(|f| {
                 f.push_inst(";; Address = env_ptr + 8 + index * 4");
                 f.push_inst("local.get $env_ptr");
@@ -872,6 +873,7 @@ impl WasmRuntime {
                 f.push_inst("i32.add");
                 f.push_inst("local.get $value");
                 f.push_inst("i32.store");
+                f.push_inst("local.get $value");
             })
             .build();
 
@@ -1310,6 +1312,69 @@ impl WasmRuntime {
                 f.push_inst("");
                 f.push_inst(";; Return arr_ptr for chaining");
                 f.push_inst("local.get $arr_ptr");
+            })
+            .build();
+
+        // Polymorphic subscript getter - dispatches based on object type.
+        // Currently supports arrays; will support hashmaps in the future.
+        // Takes an object pointer and a tagged index, returns the tagged value.
+        self.func("$subscript_get")
+            .param("$obj_ptr", "i32")
+            .param("$idx", "i32")
+            .result("i32")
+            .local("$type_tag", "i32")
+            .body(|f| {
+                f.push_inst(";; Load type tag from object (offset 0)");
+                f.push_inst("local.get $obj_ptr");
+                f.push_inst("i32.load");
+                f.push_inst("local.set $type_tag");
+                f.push_inst("");
+                f.push_inst(";; Check if it's an array (TYPE_ARRAY = 1)");
+                f.push_inst("local.get $type_tag");
+                f.push_inst("global.get $TYPE_ARRAY");
+                f.push_inst("i32.eq");
+                f.push_inst("if (result i32)");
+                f.push_inst("   local.get $obj_ptr");
+                f.push_inst("   local.get $idx");
+                f.push_inst("   call $array_get");
+                f.push_inst("else");
+                f.push_inst("   ;; TODO: add hashmap support");
+                f.push_inst("   ;; For now, return 0 for non-array objects");
+                f.push_inst("   i32.const 0");
+                f.push_inst("end");
+            })
+            .build();
+
+        // Polymorphic subscript setter - dispatches based on object type.
+        // Currently supports arrays; will support hashmaps in the future.
+        // Takes an object pointer, tagged index, and tagged value to set.
+        // Returns the object pointer for chaining.
+        self.func("$subscript_set")
+            .param("$obj_ptr", "i32")
+            .param("$idx", "i32")
+            .param("$val", "i32")
+            .result("i32")
+            .local("$type_tag", "i32")
+            .body(|f| {
+                f.push_inst(";; Load type tag from object (offset 0)");
+                f.push_inst("local.get $obj_ptr");
+                f.push_inst("i32.load");
+                f.push_inst("local.set $type_tag");
+                f.push_inst("");
+                f.push_inst(";; Check if it's an array (TYPE_ARRAY = 1)");
+                f.push_inst("local.get $type_tag");
+                f.push_inst("global.get $TYPE_ARRAY");
+                f.push_inst("i32.eq");
+                f.push_inst("if (result i32)");
+                f.push_inst("   local.get $obj_ptr");
+                f.push_inst("   local.get $idx");
+                f.push_inst("   local.get $val");
+                f.push_inst("   call $array_set");
+                f.push_inst("else");
+                f.push_inst("   ;; TODO: add hashmap support");
+                f.push_inst("   ;; For now, return the object pointer unchanged");
+                f.push_inst("   local.get $obj_ptr");
+                f.push_inst("end");
             })
             .build();
 

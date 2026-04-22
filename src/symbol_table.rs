@@ -293,7 +293,12 @@ impl<'a> SymbolTable<'a> {
                 }
                 self.walk_expression(func);
             }
-            StatementNode::For { for_block, .. } => {
+            StatementNode::For {
+                condition,
+                for_block,
+                ..
+            } => {
+                self.walk_expression(condition); // ← ADD THIS
                 self.walk_statement(for_block);
             }
             StatementNode::Return { return_value, .. } => {

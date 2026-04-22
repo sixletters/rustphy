@@ -41,6 +41,7 @@ pub struct Compiler<'a> {
     closure_idx: usize,
     symbol_table: SymbolTable<'a>,
     escape_analysis: EscapeAnalysis,
+    loop_counter: usize,
     // todo: currently compilation context is cloned, in the future might
     // be better to use rc and refcell?
     compilation_context_lookup: HashMap<usize, CompilationContext>, // binding_id -> compilation context
@@ -112,6 +113,7 @@ impl<'a> Compiler<'a> {
                 next_data_offset: 0,
                 string_data: vec![],
             },
+            loop_counter: 0,
             compilation_context_lookup: HashMap::new(),
             symbol_table: symbol_table,
             escape_analysis: EscapeAnalysis::analyze(root_node, &escape_symbol_table),
@@ -150,10 +152,12 @@ impl<'a> Compiler<'a> {
 
         runtime.emit_line(&self.compile_node(self.root_node)?);
 
-        runtime.emit_line(&format!(
-            "(elem (table $closures) (i32.const 0) func {} )",
-            self.closures_to_register.join(" ")
-        ));
+        if !self.closures_to_register.is_empty() {
+            runtime.emit_line(&format!(
+                "(elem (table $closures) (i32.const 0) func {} )",
+                self.closures_to_register.join(" ")
+            ));
+        }
         // add the func_def and ouputs
         for func_def in self.compiled_function_outputs.iter() {
             runtime.emit_line(func_def);
@@ -288,7 +292,9 @@ impl<'a> Compiler<'a> {
                         }
                         runtime.emit_line(&format!("i32.const {}", env_var_idx));
                         runtime.emit_line(&expr);
+                        // drop as env_set returns the value
                         runtime.emit_line("call $env_set");
+                        runtime.emit_line("drop");
                         return Ok(runtime.get_output().to_string());
                     }
                     let symbol = self.symbol_table.get_symbol(binding_id).unwrap();
@@ -299,7 +305,11 @@ impl<'a> Compiler<'a> {
                 ))
             }
             StatementNode::Expression { expression, .. } => {
-                Ok(self.compile_expression(expression)?)
+                let mut runtime = WasmRuntime::new();
+                runtime.emit_line(&self.compile_expression(expression)?);
+                // For statement expressions, as they have no effects elsewhere, it makes sense to drop
+                runtime.emit_line("drop");
+                Ok(runtime.get_output().to_string())
             }
             StatementNode::Block { statements, .. } => {
                 // for now we do not consider a block as a scope by itself
@@ -313,10 +323,39 @@ impl<'a> Compiler<'a> {
                 identifier, func, ..
             } => match (identifier, func) {
                 (ExpressionNode::Identifier { value, .. }, ExpressionNode::Function { .. }) => {
-                    self.compile_function_implementations(value.to_string(), func)
+                    self.compile_function_implementations(Some(value.to_string()), func)?;
+                    Ok(String::new())
                 }
                 _ => Ok(String::new()),
             },
+            StatementNode::For {
+                condition,
+                for_block,
+                ..
+            } => {
+                let mut runtime = WasmRuntime::new();
+                // use the wasm block/loop syntax to construct for loops
+                // block -> structured forward jump
+                // loop -> structured backward jump
+                // it will screw up nested loops
+                self.loop_counter += 1;
+                runtime.emit_line(&format!("(block $break_{}", self.loop_counter));
+                runtime.emit_line(&format!("(loop $continue_{}", self.loop_counter));
+                // compile condition expression and leave on stack
+                runtime.emit_line(&self.compile_expression(condition)?);
+                // if condition is false then break
+                runtime.emit_line("call $untag_immediate");
+                runtime.emit_line("i32.eqz");
+                runtime.emit_line(&format!("br_if $break_{}", self.loop_counter));
+                runtime.emit_line(&self.compile_statement(for_block)?);
+                runtime.emit_line(&format!("br $continue_{}", self.loop_counter));
+                runtime.emit_line(")");
+                runtime.emit_line(")");
+                self.loop_counter -= 1;
+                Ok(runtime.get_output().to_string())
+            }
+            StatementNode::Break { .. } => Ok(format!("br $break_{}", self.loop_counter)),
+            StatementNode::Continue { .. } => Ok(format!("br $continue_{}", self.loop_counter)),
             _ => Ok(String::new()),
         }
     }
@@ -326,12 +365,14 @@ impl<'a> Compiler<'a> {
                 Ok(format!("i32.const {}\ncall $tag_immediate", value))
             }
             ExpressionNode::Boolean { value, .. } => {
-                // todo: not sure if I have to actually call tag_immediate here
-                // doesnt make sense for there to be a tag immediate here
+                let mut runtime = WasmRuntime::new();
                 if *value {
-                    return Ok("i32.const 1".to_string());
+                    runtime.emit_line("i32.const 1");
+                } else {
+                    runtime.emit_line("i32.const 0");
                 }
-                Ok("i32.const 0".to_string())
+                runtime.emit_line("call $tag_immediate");
+                Ok(runtime.get_output().to_string())
             }
             ExpressionNode::Identifier { value, id, .. } => {
                 let binding_id = self
@@ -387,7 +428,9 @@ impl<'a> Compiler<'a> {
                 // todo: this has to be the evaluation of the condition, which leaves a value on the stack
                 // for example, the integer 0 will be tagged
                 // this would return a true instead of a false,
+                // todo: it really doesnt make sense for if to be an expression
                 runtime.emit_line(&self.compile_expression(condition)?);
+                runtime.emit_line("call $untag_immediate");
                 runtime.emit_line("if\n");
                 runtime.emit_line(&self.compile_statement(if_block)?);
                 if let Some(else_block) = else_block {
@@ -395,6 +438,9 @@ impl<'a> Compiler<'a> {
                     runtime.emit_line(&self.compile_statement(else_block)?);
                 }
                 runtime.emit_line("end");
+                // this is added as all expression statements are dropped
+                // so that it wouldnt cause an error;
+                runtime.emit_line("i32.const 0");
                 Ok(runtime.get_output().to_string())
             }
             ExpressionNode::Call {
@@ -449,11 +495,10 @@ impl<'a> Compiler<'a> {
             } => {
                 let mut runtime = WasmRuntime::new();
                 if matches!(operator, InfixOp::Assign) {
-                    let right_expr = self.compile_expression(right)?;
                     // Compile the right side (the value to assign)
-                    runtime.emit_line(&self.compile_expression(&right)?);
                     match left.as_ref() {
                         ExpressionNode::Identifier { value, id, .. } => {
+                            let right_expr = self.compile_expression(right)?;
                             let binding_id =
                                 self.symbol_table
                                     .resolve(*id)
@@ -467,19 +512,32 @@ impl<'a> Compiler<'a> {
                             }
                             runtime.emit_line(&right_expr);
                             runtime.emit_line(&format!("local.set ${}", value));
+                            runtime.emit_line(&format!("local.get ${}", value));
                         }
                         ExpressionNode::Index { object, index, .. } => {
-                            todo!()
+                            runtime.emit_line(&self.compile_expression(object)?);
+                            runtime.emit_line(&self.compile_expression(index)?);
+                            runtime.emit_line(&self.compile_expression(right)?);
+                            runtime.emit_line("call $subscript_set");
                         }
                         _ => {}
                     }
                     return Ok(runtime.get_output().to_string());
                 }
+
+                // handle not assign case
                 let left_expr = self.compile_expression(left)?;
                 let right_expr = self.compile_expression(right)?;
                 let op_inst = match operator {
-                    // todo: finish implementing other kinds of infix operators
                     InfixOp::Add => "call $add_values",
+                    InfixOp::Subtract => "call $sub_values",
+                    InfixOp::Divide => "call $div_values",
+                    InfixOp::Multiply => "call $mul_values",
+                    InfixOp::Lt => "call $lt_values",
+                    InfixOp::Gt => "call $gt_values",
+                    InfixOp::Eq => "call $eq_values",
+                    InfixOp::NotEq => "call $ne_values",
+                    // todo: add And and Or Operators
                     _ => "",
                 };
                 runtime.emit_line(&left_expr);
@@ -546,18 +604,22 @@ impl<'a> Compiler<'a> {
                 Ok(runtime.get_output().to_string())
             }
             ExpressionNode::Function { .. } => {
-                // Since this is a function expression, we have to create a closure here and return it.
-                // todo: optimize so that this doesnt happen for function declarations
-                self.compile_function_implementations(String::from("anonymous"), node)?;
+                let assigned_idx = self.compile_function_implementations(None, node)?;
                 let mut runtime = WasmRuntime::new();
-                // todo: make the -1 cleaner in the future
-                runtime.emit_line(&format!("i32.const {}", self.closure_idx - 1));
+                runtime.emit_line(&format!("i32.const {}", assigned_idx));
                 if self.compilation_context.is_global() {
                     runtime.emit_line("global.get $global_env_ptr");
                 } else {
                     runtime.emit_line("local.get $env_ptr");
                 }
                 runtime.emit_line("call $create_closure");
+                Ok(runtime.get_output().to_string())
+            }
+            ExpressionNode::Index { object, index, .. } => {
+                let mut runtime = WasmRuntime::new();
+                runtime.emit_line(&self.compile_expression(object)?);
+                runtime.emit_line(&self.compile_expression(index)?);
+                runtime.emit_line("call $subscript_get");
                 Ok(runtime.get_output().to_string())
             }
             _ => Ok(String::new()),
@@ -738,11 +800,13 @@ impl<'a> Compiler<'a> {
 
     pub fn compile_function_implementations(
         &mut self,
-        function_identifier: String,
+        // If function identifier is none, then it is an anonymous function
+        function_identifier: Option<String>,
         function_expression: &ExpressionNode,
-    ) -> Result<String> {
+    ) -> Result<usize> {
         match function_expression {
             ExpressionNode::Function { id, .. } => {
+                let assigned_idx = self.closure_idx;
                 // Push scope on the compilation_context
                 self.compilation_context = self.compilation_context.push_scope();
                 // Get the function's id
@@ -752,17 +816,22 @@ impl<'a> Compiler<'a> {
                     .ok_or(WasmCompileError::Other("No scope for function".to_string()))?;
                 self.collect_variables_for_scope(scope_id);
 
+                let function_name = match function_identifier {
+                    Some(val) => val,
+                    None => format!("lambda_{}", assigned_idx),
+                };
+
                 let direct_function =
-                    self.compile_direct_function(function_identifier.clone(), function_expression)?;
-                let closure_function = self
-                    .compile_closure_function(function_identifier.clone(), function_expression)?;
+                    self.compile_direct_function(function_name.clone(), function_expression)?;
+                let closure_function =
+                    self.compile_closure_function(function_name.clone(), function_expression)?;
                 self.compiled_function_outputs.push(direct_function);
                 self.compiled_function_outputs.push(closure_function);
                 self.compilation_context.pop_scope();
                 self.function_lookup_map
-                    .insert(function_identifier, self.closure_idx);
+                    .insert(function_name.clone(), self.closure_idx);
                 self.closure_idx += 1;
-                Ok(String::new())
+                Ok(assigned_idx)
             }
             _ => Err(WasmCompileError::Other(String::from(
                 "function definition not expression",
