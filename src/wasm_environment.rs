@@ -378,6 +378,7 @@ impl WasmRuntime {
         self.generate_closure_helpers();
         self.generate_string_helpers();
         self.generate_array_helpers();
+        self.generate_object_helpers();
         self.generate_arithmetic_helpers();
         self.generate_comparison_helpers();
 
@@ -761,16 +762,89 @@ impl WasmRuntime {
             })
             .build();
 
-        // Equals — tagged values for primitives compare equal iff the raw i32 is equal
+        // Equals — handles immediates (by value) and strings (by content)
+        // For other heap objects, compares by reference (pointer equality)
         self.func("$eq_values")
             .param("$a", "i32")
             .param("$b", "i32")
             .result("i32")
+            .local("$a_is_ptr", "i32")
+            .local("$b_is_ptr", "i32")
+            .local("$type_a", "i32")
             .body(|f| {
+                f.push_inst(";; Fast path: both immediates");
+                f.push_inst("local.get $a");
+                f.push_inst("call $is_immediate");
+                f.push_inst("local.get $b");
+                f.push_inst("call $is_immediate");
+                f.push_inst("i32.and");
+                f.push_inst("if");
+                f.push_inst("   ;; Both immediates - compare directly");
+                f.push_inst("   local.get $a");
+                f.push_inst("   local.get $b");
+                f.push_inst("   i32.eq");
+                f.push_inst("   call $tag_immediate");
+                f.push_inst("   return");
+                f.push_inst("end");
+                f.push_inst("");
+                f.push_inst(";; Check if both are pointers");
+                f.push_inst("local.get $a");
+                f.push_inst("call $is_pointer");
+                f.push_inst("local.set $a_is_ptr");
+                f.push_inst("local.get $b");
+                f.push_inst("call $is_pointer");
+                f.push_inst("local.set $b_is_ptr");
+                f.push_inst("");
+                f.push_inst(";; If not both pointers, they're not equal");
+                f.push_inst("local.get $a_is_ptr");
+                f.push_inst("local.get $b_is_ptr");
+                f.push_inst("i32.and");
+                f.push_inst("i32.eqz");
+                f.push_inst("if");
+                f.push_inst("   i32.const 0");
+                f.push_inst("   call $tag_immediate");
+                f.push_inst("   return");
+                f.push_inst("end");
+                f.push_inst("");
+                f.push_inst(";; Both are pointers - check reference equality first");
                 f.push_inst("local.get $a");
                 f.push_inst("local.get $b");
                 f.push_inst("i32.eq");
-                f.push_inst("call $tag_immediate");
+                f.push_inst("if");
+                f.push_inst("   ;; Same pointer - equal");
+                f.push_inst("   i32.const 1");
+                f.push_inst("   call $tag_immediate");
+                f.push_inst("   return");
+                f.push_inst("end");
+                f.push_inst("");
+                f.push_inst(";; Different pointers - check if both are strings");
+                f.push_inst("local.get $a");
+                f.push_inst("i32.load");
+                f.push_inst("local.tee $type_a");
+                f.push_inst("global.get $TYPE_STRING");
+                f.push_inst("i32.ne");
+                f.push_inst("if");
+                f.push_inst("   ;; Not strings - return false (different pointers)");
+                f.push_inst("   i32.const 0");
+                f.push_inst("   call $tag_immediate");
+                f.push_inst("   return");
+                f.push_inst("end");
+                f.push_inst("");
+                f.push_inst(";; Check if b is also a string");
+                f.push_inst("local.get $b");
+                f.push_inst("i32.load");
+                f.push_inst("local.get $type_a");
+                f.push_inst("i32.ne");
+                f.push_inst("if");
+                f.push_inst("   i32.const 0");
+                f.push_inst("   call $tag_immediate");
+                f.push_inst("   return");
+                f.push_inst("end");
+                f.push_inst("");
+                f.push_inst(";; Both are strings - compare contents");
+                f.push_inst("local.get $a");
+                f.push_inst("local.get $b");
+                f.push_inst("call $string_equals");
             })
             .build();
 
@@ -1227,6 +1301,82 @@ impl WasmRuntime {
             })
             .build();
 
+        // Compare two strings for equality (byte-by-byte comparison)
+        // Returns tagged 1 if equal, tagged 0 if not equal
+        self.func("$string_equals")
+            .param("$str1", "i32")
+            .param("$str2", "i32")
+            .result("i32")
+            .local("$len1", "i32")
+            .local("$len2", "i32")
+            .local("$i", "i32")
+            .body(|f| {
+                f.push_inst(";; Get lengths of both strings");
+                f.push_inst("local.get $str1");
+                f.push_inst("i32.load offset=4");
+                f.push_inst("local.set $len1");
+                f.push_inst("");
+                f.push_inst("local.get $str2");
+                f.push_inst("i32.load offset=4");
+                f.push_inst("local.set $len2");
+                f.push_inst("");
+                f.push_inst(";; If different lengths, not equal");
+                f.push_inst("local.get $len1");
+                f.push_inst("local.get $len2");
+                f.push_inst("i32.ne");
+                f.push_inst("if");
+                f.push_inst("   i32.const 0");
+                f.push_inst("   call $tag_immediate");
+                f.push_inst("   return");
+                f.push_inst("end");
+                f.push_inst("");
+                f.push_inst(";; Compare bytes one by one");
+                f.push_inst("(block $not_equal");
+                f.push_inst("   (loop $compare");
+                f.push_inst("      ;; Check if done");
+                f.push_inst("      local.get $i");
+                f.push_inst("      local.get $len1");
+                f.push_inst("      i32.ge_u");
+                f.push_inst("      br_if $not_equal");
+                f.push_inst("");
+                f.push_inst("      ;; Compare byte at offset 8 + i");
+                f.push_inst("      local.get $str1");
+                f.push_inst("      i32.const 8");
+                f.push_inst("      local.get $i");
+                f.push_inst("      i32.add");
+                f.push_inst("      i32.add");
+                f.push_inst("      i32.load8_u");
+                f.push_inst("");
+                f.push_inst("      local.get $str2");
+                f.push_inst("      i32.const 8");
+                f.push_inst("      local.get $i");
+                f.push_inst("      i32.add");
+                f.push_inst("      i32.add");
+                f.push_inst("      i32.load8_u");
+                f.push_inst("");
+                f.push_inst("      i32.ne");
+                f.push_inst("      if");
+                f.push_inst("         ;; Bytes differ - return false");
+                f.push_inst("         i32.const 0");
+                f.push_inst("         call $tag_immediate");
+                f.push_inst("         return");
+                f.push_inst("      end");
+                f.push_inst("");
+                f.push_inst("      ;; Increment and continue");
+                f.push_inst("      local.get $i");
+                f.push_inst("      i32.const 1");
+                f.push_inst("      i32.add");
+                f.push_inst("      local.set $i");
+                f.push_inst("      br $compare");
+                f.push_inst("   )");
+                f.push_inst(")");
+                f.push_inst("");
+                f.push_inst(";; All bytes matched - return true");
+                f.push_inst("i32.const 1");
+                f.push_inst("call $tag_immediate");
+            })
+            .build();
+
         self.emit_newline();
     }
 
@@ -1316,8 +1466,8 @@ impl WasmRuntime {
             .build();
 
         // Polymorphic subscript getter - dispatches based on object type.
-        // Currently supports arrays; will support hashmaps in the future.
-        // Takes an object pointer and a tagged index, returns the tagged value.
+        // Supports arrays and objects (hashmaps).
+        // Takes an object pointer and a tagged index/key, returns the tagged value.
         self.func("$subscript_get")
             .param("$obj_ptr", "i32")
             .param("$idx", "i32")
@@ -1338,17 +1488,26 @@ impl WasmRuntime {
                 f.push_inst("   local.get $idx");
                 f.push_inst("   call $array_get");
                 f.push_inst("else");
-                f.push_inst("   ;; TODO: add hashmap support");
-                f.push_inst("   ;; For now, return 0 for non-array objects");
-                f.push_inst("   i32.const 0");
+                f.push_inst("   ;; Check if it's an object (TYPE_OBJECT = 3)");
+                f.push_inst("   local.get $type_tag");
+                f.push_inst("   i32.const 3");
+                f.push_inst("   i32.eq");
+                f.push_inst("   if (result i32)");
+                f.push_inst("      local.get $obj_ptr");
+                f.push_inst("      local.get $idx");
+                f.push_inst("      call $object_get");
+                f.push_inst("   else");
+                f.push_inst("      ;; Unknown type - return 0");
+                f.push_inst("      i32.const 0");
+                f.push_inst("   end");
                 f.push_inst("end");
             })
             .build();
 
         // Polymorphic subscript setter - dispatches based on object type.
-        // Currently supports arrays; will support hashmaps in the future.
-        // Takes an object pointer, tagged index, and tagged value to set.
-        // Returns the object pointer for chaining.
+        // Supports arrays and objects (hashmaps).
+        // Takes an object pointer, tagged index/key, and tagged value to set.
+        // Returns the object pointer for chaining (may be new pointer for objects).
         self.func("$subscript_set")
             .param("$obj_ptr", "i32")
             .param("$idx", "i32")
@@ -1371,10 +1530,306 @@ impl WasmRuntime {
                 f.push_inst("   local.get $val");
                 f.push_inst("   call $array_set");
                 f.push_inst("else");
-                f.push_inst("   ;; TODO: add hashmap support");
-                f.push_inst("   ;; For now, return the object pointer unchanged");
+                f.push_inst("   ;; Check if it's an object (TYPE_OBJECT = 3)");
+                f.push_inst("   local.get $type_tag");
+                f.push_inst("   i32.const 3");
+                f.push_inst("   i32.eq");
+                f.push_inst("   if (result i32)");
+                f.push_inst("      local.get $obj_ptr");
+                f.push_inst("      local.get $idx");
+                f.push_inst("      local.get $val");
+                f.push_inst("      call $object_set");
+                f.push_inst("   else");
+                f.push_inst("      ;; Unknown type - return obj_ptr unchanged");
+                f.push_inst("      local.get $obj_ptr");
+                f.push_inst("   end");
+                f.push_inst("end");
+            })
+            .build();
+
+        self.emit_newline();
+    }
+
+    // ========================================================================
+    // OBJECT HELPERS
+    // ========================================================================
+    // Objects (hashmaps) are heap objects using linear search.
+    //
+    // Object layout on the heap:
+    //   Offset 0: TYPE_OBJECT = 3    (i32)
+    //   Offset 4: size_in_bytes       (i32) - total bytes of key-value pairs
+    //   Offset 8: key1                (tagged i32)
+    //   Offset 12: value1             (tagged i32)
+    //   Offset 16: key2               (tagged i32)
+    //   Offset 20: value2             (tagged i32)
+    //   ...
+    //
+    // Each key-value pair takes 8 bytes (2 × i32).
+    // To get pair_count: size_in_bytes >> 3 (divide by 8)
+
+    pub fn generate_object_helpers(&mut self) {
+        self.emit_comment("Object Helpers (Linear Search Implementation)");
+
+        // Helper: Find the index of a key in an object
+        // Returns the pair index (0, 1, 2...) if found, or -1 if not found
+        self.func("$object_find_index")
+            .param("$obj_ptr", "i32")
+            .param("$key", "i32")
+            .result("i32")
+            .local("$pair_count", "i32")
+            .local("$i", "i32")
+            .local("$current_key", "i32")
+            .body(|f| {
+                f.push_inst(";; Load pair_count from offset 4");
+                f.push_inst("local.get $obj_ptr");
+                f.push_inst("i32.load offset=4");
+                f.push_inst("i32.const 3");
+                f.push_inst("i32.shr_u");
+                f.push_inst("local.set $pair_count");
+                f.push_inst("");
+                f.push_inst(";; Search for key");
+                f.push_inst("(block $found");
+                f.push_inst("   (loop $search");
+                f.push_inst("      ;; Check if i >= pair_count");
+                f.push_inst("      local.get $i");
+                f.push_inst("      local.get $pair_count");
+                f.push_inst("      i32.ge_u");
+                f.push_inst("      br_if $found");
+                f.push_inst("");
+                f.push_inst("      ;; Load key at: obj_ptr + 8 + (i * 8)");
+                f.push_inst("      local.get $obj_ptr");
+                f.push_inst("      i32.const 8");
+                f.push_inst("      local.get $i");
+                f.push_inst("      i32.const 8");
+                f.push_inst("      i32.mul");
+                f.push_inst("      i32.add");
+                f.push_inst("      i32.add");
+                f.push_inst("      i32.load");
+                f.push_inst("      local.set $current_key");
+                f.push_inst("");
+                f.push_inst("      ;; Compare keys using $eq_values");
+                f.push_inst("      local.get $current_key");
+                f.push_inst("      local.get $key");
+                f.push_inst("      call $eq_values");
+                f.push_inst("      call $untag_immediate");
+                f.push_inst("");
+                f.push_inst("      if");
+                f.push_inst("         ;; Found! Return index");
+                f.push_inst("         local.get $i");
+                f.push_inst("         return");
+                f.push_inst("      end");
+                f.push_inst("");
+                f.push_inst("      ;; Increment i and continue");
+                f.push_inst("      local.get $i");
+                f.push_inst("      i32.const 1");
+                f.push_inst("      i32.add");
+                f.push_inst("      local.set $i");
+                f.push_inst("      br $search");
+                f.push_inst("   )");
+                f.push_inst(")");
+                f.push_inst("");
+                f.push_inst(";; Not found - return -1");
+                f.push_inst("i32.const -1");
+            })
+            .build();
+
+        // Helper: Grow object by adding N pairs
+        // Returns new object pointer (data is copied)
+        self.func("$object_grow")
+            .param("$old_ptr", "i32")
+            .param("$pairs_to_add", "i32")
+            .result("i32")
+            .local("$old_size", "i32")
+            .local("$new_size", "i32")
+            .local("$new_ptr", "i32")
+            .local("$i", "i32")
+            .body(|f| {
+                f.push_inst(";; Load old size in bytes");
+                f.push_inst("local.get $old_ptr");
+                f.push_inst("i32.load offset=4");
+                f.push_inst("local.set $old_size");
+                f.push_inst("");
+                f.push_inst(";; Calculate new size: old_size + (pairs_to_add * 8)");
+                f.push_inst("local.get $old_size");
+                f.push_inst("local.get $pairs_to_add");
+                f.push_inst("i32.const 8");
+                f.push_inst("i32.mul");
+                f.push_inst("i32.add");
+                f.push_inst("local.set $new_size");
+                f.push_inst("");
+                f.push_inst(";; Allocate new object");
+                f.push_inst("global.get $TYPE_OBJECT");
+                f.push_inst("local.get $new_size");
+                f.push_inst("call $heap_alloc");
+                f.push_inst("local.set $new_ptr");
+                f.push_inst("");
+                f.push_inst(";; Copy old data byte-by-byte");
+                f.push_inst("(block $copy_done");
+                f.push_inst("   (loop $copy_loop");
+                f.push_inst("      local.get $i");
+                f.push_inst("      local.get $old_size");
+                f.push_inst("      i32.ge_u");
+                f.push_inst("      br_if $copy_done");
+                f.push_inst("");
+                f.push_inst("      ;; Copy byte at offset 8 + i");
+                f.push_inst("      local.get $new_ptr");
+                f.push_inst("      i32.const 8");
+                f.push_inst("      local.get $i");
+                f.push_inst("      i32.add");
+                f.push_inst("      i32.add");
+                f.push_inst("");
+                f.push_inst("      local.get $old_ptr");
+                f.push_inst("      i32.const 8");
+                f.push_inst("      local.get $i");
+                f.push_inst("      i32.add");
+                f.push_inst("      i32.add");
+                f.push_inst("      i32.load8_u");
+                f.push_inst("      i32.store8");
+                f.push_inst("");
+                f.push_inst("      local.get $i");
+                f.push_inst("      i32.const 1");
+                f.push_inst("      i32.add");
+                f.push_inst("      local.set $i");
+                f.push_inst("      br $copy_loop");
+                f.push_inst("   )");
+                f.push_inst(")");
+                f.push_inst("");
+                f.push_inst(";; Return new pointer");
+                f.push_inst("local.get $new_ptr");
+            })
+            .build();
+
+        // Create an empty object
+        self.func("$create_object_empty")
+            .result("i32")
+            .body(|f| {
+                f.push_inst(";; Allocate object with TYPE_OBJECT=3, size=0 pairs");
+                f.push_inst("global.get $TYPE_OBJECT");
+                f.push_inst("i32.const 0");
+                f.push_inst("call $heap_alloc");
+            })
+            .build();
+
+        // Get value for a key (returns value or tagged 0 if not found)
+        self.func("$object_get")
+            .param("$obj_ptr", "i32")
+            .param("$key", "i32")
+            .result("i32")
+            .local("$idx", "i32")
+            .body(|f| {
+                f.push_inst(";; Find key index");
+                f.push_inst("local.get $obj_ptr");
+                f.push_inst("local.get $key");
+                f.push_inst("call $object_find_index");
+                f.push_inst("local.tee $idx");
+                f.push_inst("");
+                f.push_inst(";; Check if found (idx >= 0)");
+                f.push_inst("i32.const 0");
+                f.push_inst("i32.lt_s");
+                f.push_inst("if");
+                f.push_inst("   ;; Not found - return tagged 0");
+                f.push_inst("   i32.const 0");
+                f.push_inst("   call $tag_immediate");
+                f.push_inst("   return");
+                f.push_inst("end");
+                f.push_inst("");
+                f.push_inst(";; Found - load value at: obj_ptr + 8 + (idx * 8) + 4");
+                f.push_inst("local.get $obj_ptr");
+                f.push_inst("i32.const 8");
+                f.push_inst("local.get $idx");
+                f.push_inst("i32.const 8");
+                f.push_inst("i32.mul");
+                f.push_inst("i32.add");
+                f.push_inst("i32.add");
+                f.push_inst("i32.load offset=4");
+            })
+            .build();
+
+        // Set a key-value pair (returns new object pointer, may reallocate)
+        self.func("$object_set")
+            .param("$obj_ptr", "i32")
+            .param("$key", "i32")
+            .param("$value", "i32")
+            .result("i32")
+            .local("$idx", "i32")
+            .local("$old_size", "i32")
+            .body(|f| {
+                f.push_inst(";; Find key index");
+                f.push_inst("local.get $obj_ptr");
+                f.push_inst("local.get $key");
+                f.push_inst("call $object_find_index");
+                f.push_inst("local.tee $idx");
+                f.push_inst("");
+                f.push_inst(";; Check if found (idx >= 0)");
+                f.push_inst("i32.const 0");
+                f.push_inst("i32.ge_s");
+                f.push_inst("if (result i32)");
+                f.push_inst("   ;; Found - update value in place");
+                f.push_inst("   local.get $obj_ptr");
+                f.push_inst("   i32.const 8");
+                f.push_inst("   local.get $idx");
+                f.push_inst("   i32.const 8");
+                f.push_inst("   i32.mul");
+                f.push_inst("   i32.add");
+                f.push_inst("   i32.add");
+                f.push_inst("   local.get $value");
+                f.push_inst("   i32.store offset=4");
+                f.push_inst("");
+                f.push_inst("   ;; Return same pointer");
+                f.push_inst("   local.get $obj_ptr");
+                f.push_inst("else");
+                f.push_inst("   ;; Not found - grow by 1 pair");
+                f.push_inst("   local.get $obj_ptr");
+                f.push_inst("   i32.const 1");
+                f.push_inst("   call $object_grow");
+                f.push_inst("   local.set $obj_ptr");
+                f.push_inst("");
+                f.push_inst("   ;; Get old size to know where to append");
+                f.push_inst("   local.get $obj_ptr");
+                f.push_inst("   i32.load offset=4");
+                f.push_inst("   i32.const 8");
+                f.push_inst("   i32.sub");
+                f.push_inst("   local.set $old_size");
+                f.push_inst("");
+                f.push_inst("   ;; Write key at: obj_ptr + 8 + old_size");
+                f.push_inst("   local.get $obj_ptr");
+                f.push_inst("   i32.const 8");
+                f.push_inst("   local.get $old_size");
+                f.push_inst("   i32.add");
+                f.push_inst("   i32.add");
+                f.push_inst("   local.get $key");
+                f.push_inst("   i32.store");
+                f.push_inst("");
+                f.push_inst("   ;; Write value at: obj_ptr + 8 + old_size + 4");
+                f.push_inst("   local.get $obj_ptr");
+                f.push_inst("   i32.const 8");
+                f.push_inst("   local.get $old_size");
+                f.push_inst("   i32.add");
+                f.push_inst("   i32.add");
+                f.push_inst("   local.get $value");
+                f.push_inst("   i32.store offset=4");
+                f.push_inst("");
+                f.push_inst("   ;; Return new pointer");
                 f.push_inst("   local.get $obj_ptr");
                 f.push_inst("end");
+            })
+            .build();
+
+        // Check if object has a key
+        self.func("$object_has")
+            .param("$obj_ptr", "i32")
+            .param("$key", "i32")
+            .result("i32")
+            .body(|f| {
+                f.push_inst(";; Find key index");
+                f.push_inst("local.get $obj_ptr");
+                f.push_inst("local.get $key");
+                f.push_inst("call $object_find_index");
+                f.push_inst("");
+                f.push_inst(";; If index >= 0, return true (1), else false (0)");
+                f.push_inst("i32.const 0");
+                f.push_inst("i32.ge_s");
+                f.push_inst("call $tag_immediate");
             })
             .build();
 

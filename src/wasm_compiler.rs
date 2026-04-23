@@ -136,12 +136,14 @@ impl<'a> Compiler<'a> {
         runtime.emit_line("(type $function_type (func (param i32 i32) (result i32)))");
         runtime.emit_newline();
         runtime.emit_line("(table $closures 5 funcref)");
+        runtime.emit_line("(global $TYPE_OBJECT (mut i32) (i32.const 3))");
         runtime.emit_line("(global $TYPE_CLOSURE (mut i32) (i32.const 2))");
         runtime.emit_line("(global $TYPE_ARRAY (mut i32) (i32.const 1))");
         runtime.emit_line("(global $TYPE_STRING (mut i32) (i32.const 0))");
 
         runtime.generate_heap_alloc();
         runtime.generate_tag_helpers();
+        runtime.generate_object_helpers();
         runtime.generate_arg_helpers();
         runtime.generate_closure_helpers();
         runtime.generate_comparison_helpers();
@@ -620,6 +622,16 @@ impl<'a> Compiler<'a> {
                 runtime.emit_line(&self.compile_expression(object)?);
                 runtime.emit_line(&self.compile_expression(index)?);
                 runtime.emit_line("call $subscript_get");
+                Ok(runtime.get_output().to_string())
+            }
+            ExpressionNode::HashMap { pairs, id, .. } => {
+                let mut runtime = WasmRuntime::new();
+                runtime.emit_line("call $create_object_empty");
+                for (key, value) in pairs.iter() {
+                    runtime.emit_line(&self.compile_expression(key)?);
+                    runtime.emit_line(&self.compile_expression(value)?);
+                    runtime.emit_line("call $object_set");
+                }
                 Ok(runtime.get_output().to_string())
             }
             _ => Ok(String::new()),
