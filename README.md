@@ -62,9 +62,9 @@ Rustphy is an educational programming language project that demonstrates the com
    let name = "World";
    print("Hello, " + name + "!");
 
-   fn greet(person) {
+   func greet(person) {
        return "Welcome, " + person;
-   }
+   };
 
    print(greet("Rustphy"));
    ```
@@ -109,12 +109,12 @@ rustphy run math.gph
 Create `fibonacci.gph`:
 
 ```javascript
-fn fib(n) {
+func fib(n) {
     if (n <= 1) {
         return n;
-    }
+    };
     return fib(n - 1) + fib(n - 2);
-}
+};
 
 print("Fibonacci(10) = " + fib(10));
 ```
@@ -130,7 +130,7 @@ let total = 0;
 for (let i = 0; i < 5; i += 1) {
   total += numbers[i];
   print("Added " + numbers[i] + ", total now: " + total);
-}
+};
 
 print("Final sum: " + total);
 ```
@@ -170,7 +170,7 @@ Use Rustphy with stdin for quick experiments:
 echo 'print(10 + 20 * 3);' | rustphy run
 
 # Test functions
-echo 'fn double(x) { return x * 2; } print(double(21));' | rustphy run
+echo 'func double(x) { return x * 2; }; print(double(21));' | rustphy run
 
 # Inspect AST
 echo 'let x = 5 + 10;' | rustphy parse
@@ -342,7 +342,7 @@ if (x > 10) {
   print("x is greater than 10");
 } else {
   print("x is 10 or less");
-}
+};
 ```
 
 ### Loops
@@ -350,15 +350,15 @@ if (x > 10) {
 ```javascript
 for (let i = 0; i < 10; i += 1) {
   print(i);
-}
+};
 ```
 
 ### Functions
 
 ```javascript
-fn add(a, b) {
+func add(a, b) {
     return a + b;
-}
+};
 
 let result = add(5, 3);
 ```

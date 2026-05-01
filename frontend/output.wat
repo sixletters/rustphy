@@ -1,4 +1,6 @@
 (module
+(import "env" "log" (func $log (param i32)))
+
 (memory $heap (export "memory") 1)
 (global $heap_ptr (mut i32) (i32.const 1024))
 (global $global_env_ptr (mut i32) (i32.const 0))
@@ -937,35 +939,30 @@
 
 (func $main (export "main")
    (local $x i32)
-   (local $value i32)
    global.get $global_env_ptr
    i32.const 0
    call $create_env
    global.set $global_env_ptr
-   call $create_object_empty
-   i32.const 0
-   i32.const 4
-   call $create_string
    i32.const 1
    call $tag_immediate
-   call $object_set
-   i32.const 4
-   i32.const 9
-   call $create_string
-   i32.const 2
+   call $untag_immediate
+   if (result i32)
+   i32.const 1
    call $tag_immediate
-   call $object_set
-   local.set $x
-   local.get $x
+   call $untag_immediate
+   else
    i32.const 0
-   i32.const 4
+   end
+   call $tag_immediate
+   local.set $x
+   i32.const 0
+   i32.const 6
    call $create_string
-   call $subscript_get
-   local.set $value
+   call $log
+   i32.const 0
+   drop
 )
 
-(data (i32.const 0) "test")
-
-(data (i32.const 4) "other_key")
+(data (i32.const 0) "harris")
 
 )

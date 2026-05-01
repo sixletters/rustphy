@@ -133,18 +133,20 @@ let person = {
 
 ## Control Flow
 
+**Important:** All control flow blocks (if, else, for) require a semicolon at the end!
+
 ### If Statement
 
 ```javascript
 if (condition) {
     // code
-}
+};
 
 if (condition) {
     // code
 } else {
     // code
-}
+};
 
 // Nested
 if (x > 10) {
@@ -154,8 +156,8 @@ if (x > 10) {
         print("medium");
     } else {
         print("small");
-    }
-}
+    };
+};
 ```
 
 ### For Loop
@@ -164,24 +166,24 @@ if (x > 10) {
 // Basic loop
 for (let i = 0; i < 10; i += 1) {
     print(i);
-}
+};
 
 // Custom step
 for (let i = 0; i < 100; i += 10) {
     print(i);
-}
+};
 
 // Countdown
 for (let i = 10; i > 0; i -= 1) {
     print(i);
-}
+};
 
 // Nested loops
 for (let i = 0; i < 3; i += 1) {
     for (let j = 0; j < 3; j += 1) {
         print(i + "," + j);
-    }
-}
+    };
+};
 ```
 
 ### While Loop (if supported)
@@ -189,7 +191,7 @@ for (let i = 0; i < 3; i += 1) {
 ```javascript
 while (condition) {
     // code
-}
+};
 ```
 
 ---
@@ -198,21 +200,23 @@ while (condition) {
 
 ### Definition
 
+**Important:** Function declarations require a semicolon at the end!
+
 ```javascript
 // Basic function
-fn greet(name) {
+func greet(name) {
     return "Hello, " + name;
-}
+};
 
 // Multiple parameters
-fn add(a, b) {
+func add(a, b) {
     return a + b;
-}
+};
 
 // No parameters
-fn sayHello() {
+func sayHello() {
     print("Hello!");
-}
+};
 ```
 
 ### Calling Functions
@@ -225,18 +229,18 @@ greet("Alice");
 ### Recursive Functions
 
 ```javascript
-fn factorial(n) {
+func factorial(n) {
     if (n <= 1) {
         return 1;
     }
     return n * factorial(n - 1);
-}
+};
 ```
 
 ### Function Expressions (First-class Functions)
 
 ```javascript
-let double = fn(x) {
+let double = func(x) {
     return x * 2;
 };
 
@@ -246,13 +250,13 @@ print(double(5));  // 10
 ### Higher-Order Functions
 
 ```javascript
-fn applyTwice(f, x) {
+func applyTwice(f, x) {
     return f(f(x));
-}
+};
 
-fn increment(x) {
+func increment(x) {
     return x + 1;
-}
+};
 
 print(applyTwice(increment, 5));  // 7
 ```
@@ -321,7 +325,7 @@ print(x + y);
 let sum = 0;
 for (let i = 0; i < size; i += 1) {
     sum += arr[i];
-}
+};
 ```
 
 ### Find Maximum
@@ -331,8 +335,8 @@ let max = arr[0];
 for (let i = 1; i < size; i += 1) {
     if (arr[i] > max) {
         max = arr[i];
-    }
-}
+    };
+};
 ```
 
 ### Count Loop
@@ -340,7 +344,7 @@ for (let i = 1; i < size; i += 1) {
 ```javascript
 for (let i = 1; i <= n; i += 1) {
     // do something n times
-}
+};
 ```
 
 ### Swap Variables
@@ -354,17 +358,17 @@ b = temp;
 ### Check Even/Odd
 
 ```javascript
-fn isEven(n) {
+func isEven(n) {
     return (n - (n / 2) * 2) == 0;
-}
+};
 ```
 
 ### Modulo Operation (since % not available)
 
 ```javascript
-fn mod(a, b) {
+func mod(a, b) {
     return a - (a / b) * b;
-}
+};
 ```
 
 ---
@@ -396,11 +400,11 @@ let quotient = 10 / 3;   // 3 (integer division)
 ```javascript
 if (x > 0 && x < 10) {
     print("Single digit positive");
-}
+};
 
 if (x == 0 || x == 1) {
     print("Zero or one");
-}
+};
 ```
 
 ---
@@ -423,17 +427,17 @@ Current limitations to be aware of:
 
 ```javascript
 // Fibonacci sequence generator
-fn fibonacci(n) {
+func fibonacci(n) {
     if (n <= 1) {
         return n;
-    }
+    };
     return fibonacci(n - 1) + fibonacci(n - 2);
-}
+};
 
 // Print first 10 Fibonacci numbers
 for (let i = 0; i < 10; i += 1) {
     print("fib(" + i + ") = " + fibonacci(i));
-}
+};
 
 // Output:
 // fib(0) = 0

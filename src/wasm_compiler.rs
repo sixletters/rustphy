@@ -3,12 +3,38 @@
 //! Compiles AST → WAT (WebAssembly Text format) → compile with wat2wasm → WASM binary
 //!
 
-use crate::ast::{ExpressionNode, InfixOp, Node, StatementNode};
+use crate::ast::{ExpressionNode, InfixOp, Node, PrefixOp, StatementNode};
 use crate::escape_analysis::EscapeAnalysis;
 use crate::symbol_table::{BindType, SymbolTable};
 use crate::wasm_environment::WasmRuntime;
+use std::str::FromStr;
 
 use std::collections::HashMap;
+
+// Define the enum for all built-in functions
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BuiltinFunction {
+    Log,
+    Print,
+    Len,
+    Push,
+    Pop,
+}
+
+impl FromStr for BuiltinFunction {
+    type Err = ();
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "log" => Ok(BuiltinFunction::Log),
+            "print" => Ok(BuiltinFunction::Print),
+            "len" => Ok(BuiltinFunction::Len),
+            "push" => Ok(BuiltinFunction::Push),
+            "pop" => Ok(BuiltinFunction::Pop),
+            _ => Err(()),
+        }
+    }
+}
 
 /// Compiler errors
 #[derive(Debug)]
@@ -30,6 +56,13 @@ impl std::error::Error for WasmCompileError {}
 
 type Result<T> = std::result::Result<T, WasmCompileError>;
 
+/// WebAssembly compiler that transforms Rustphy AST into WAT (WebAssembly Text format).
+///
+/// The compiler handles:
+/// - Variable scoping and closure capture
+/// - Function compilation (both declarations and anonymous functions)
+/// - String literal deduplication
+/// - Escape analysis for determining heap vs stack allocation
 pub struct Compiler<'a> {
     root_node: &'a Node,
     compiled_function_outputs: Vec<String>,
@@ -96,8 +129,10 @@ impl CompilationContext {
 }
 
 impl<'a> Compiler<'a> {
+    /// Creates a new WASM compiler for the given AST.
+    ///
+    /// Initializes symbol table and escape analysis for the program.
     pub fn new(root_node: &'a Node) -> Self {
-        // todo: fix this weird ass
         let symbol_table = SymbolTable::new(root_node);
         let mut escape_symbol_table = SymbolTable::new(root_node);
         escape_symbol_table.build();
@@ -120,7 +155,32 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    // Call this compile first
+    fn compile_builtin_call(
+        &mut self,
+        builtin: BuiltinFunction,
+        arguments: &[Box<ExpressionNode>],
+    ) -> Result<String> {
+        let mut runtime = WasmRuntime::new();
+        match builtin {
+            BuiltinFunction::Print => {
+                for arg in arguments {
+                    runtime.emit_line(&self.compile_expression(arg)?);
+                }
+                runtime.emit_line("call $print");
+                runtime.emit_line("i32.const 0");
+            }
+            _ => {}
+        }
+        Ok(runtime.get_output().to_string())
+    }
+
+    /// Compiles the AST to WebAssembly Text (WAT) format.
+    ///
+    /// Returns a complete WASM module including:
+    /// - Memory and table declarations
+    /// - Runtime functions (environment, closures, type operations)
+    /// - Compiled user functions
+    /// - String data section
     pub fn compile(&mut self) -> Result<String> {
         // build the symbol table
         self.symbol_table.build();
@@ -129,6 +189,10 @@ impl<'a> Compiler<'a> {
         let mut runtime = WasmRuntime::new();
         // module header
         runtime.emit_line("(module");
+
+        // Import print function from JavaScript
+        runtime.emit_line("(import \"env\" \"print\" (func $print (param i32)))");
+        runtime.emit_newline();
 
         runtime.emit_line("(memory $heap (export \"memory\") 1)");
         runtime.emit_line("(global $heap_ptr (mut i32) (i32.const 1024))");
@@ -173,7 +237,6 @@ impl<'a> Compiler<'a> {
     }
 
     fn collect_variables_for_scope(&mut self, scope_id: usize) {
-        // todo: Explore if its better to not make this stateful
         // Get all bindings in this scope (including nested blocks)
         let all_bindings = self
             .symbol_table
@@ -190,7 +253,6 @@ impl<'a> Compiler<'a> {
             if !matches!(current_symbol.bind_type, BindType::VariableDeclaraion) {
                 continue;
             }
-            // todo: check this logic
             if self.escape_analysis.does_escape(binding_id) {
                 self.compilation_context
                     .escaped_locals
@@ -226,7 +288,6 @@ impl<'a> Compiler<'a> {
                 self.collect_variables_for_scope(scope_id);
 
                 // temporaily export main to test in browser
-                // todo: this can actually be made to look prettier in the future
                 runtime
                     .function("$main (export \"main\")")
                     .body(|f| {
@@ -323,13 +384,14 @@ impl<'a> Compiler<'a> {
             }
             StatementNode::FuncDeclr {
                 identifier, func, ..
-            } => match (identifier, func) {
-                (ExpressionNode::Identifier { value, .. }, ExpressionNode::Function { .. }) => {
+            } => {
+                if let (ExpressionNode::Identifier { value, .. }, ExpressionNode::Function { .. }) = (identifier, func) {
                     self.compile_function_implementations(Some(value.to_string()), func)?;
                     Ok(String::new())
+                } else {
+                    Err(WasmCompileError::Other("FuncDeclr must have identifier and function".to_string()))
                 }
-                _ => Ok(String::new()),
-            },
+            }
             StatementNode::For {
                 condition,
                 for_block,
@@ -358,7 +420,6 @@ impl<'a> Compiler<'a> {
             }
             StatementNode::Break { .. } => Ok(format!("br $break_{}", self.loop_counter)),
             StatementNode::Continue { .. } => Ok(format!("br $continue_{}", self.loop_counter)),
-            _ => Ok(String::new()),
         }
     }
     pub fn compile_expression(&mut self, node: &ExpressionNode) -> Result<String> {
@@ -385,13 +446,11 @@ impl<'a> Compiler<'a> {
                 match self.symbol_table.get_symbol(binding_id) {
                     Some(val) => {
                         if matches!(val.bind_type, BindType::FunctionDeclaration) {
-                            // todo: Make this way way nicer
                             // handle assignment of function declaration
                             let mut runtime = WasmRuntime::new();
-                            // todo: make the -1 cleaner in the future
                             let func_declr_idx = match self.function_lookup_map.get(value) {
                                 Some(val) => val,
-                                None => return Err(WasmCompileError::Other(String::from("OH NO"))),
+                                None => return Err(WasmCompileError::Other(format!("Function '{}' not found in lookup map", value))),
                             };
                             runtime.emit_line(&format!("i32.const {}", func_declr_idx));
                             if self.compilation_context.is_global() {
@@ -420,6 +479,29 @@ impl<'a> Compiler<'a> {
                         )))?;
                 Ok(format!("local.get ${}", symbol.name))
             }
+            ExpressionNode::Prefix {
+                operator, right, ..
+            } => {
+                let mut runtime = WasmRuntime::new();
+                match operator {
+                    PrefixOp::Negative => {
+                        runtime.emit_line(&self.compile_expression(right)?);
+                        // only makes sense to negate if it is a number anyways
+                        // so call eimmediate is sage
+                        runtime.emit_line("call $untag_immediate");
+                        runtime.emit_line("i32.const 0");
+                        runtime.emit_line("i32.sub");
+                        runtime.emit_line("call $tag_immediate");
+                    }
+                    PrefixOp::Not => {
+                        runtime.emit_line(&self.compile_expression(right)?);
+                        runtime.emit_line("call $untag_immediate");
+                        runtime.emit_line("i32.eqz");
+                        runtime.emit_line("call $tag_immediate");
+                    }
+                }
+                Ok(runtime.get_output().to_string())
+            }
             ExpressionNode::If {
                 condition,
                 if_block,
@@ -427,10 +509,6 @@ impl<'a> Compiler<'a> {
                 ..
             } => {
                 let mut runtime = WasmRuntime::new();
-                // todo: this has to be the evaluation of the condition, which leaves a value on the stack
-                // for example, the integer 0 will be tagged
-                // this would return a true instead of a false,
-                // todo: it really doesnt make sense for if to be an expression
                 runtime.emit_line(&self.compile_expression(condition)?);
                 runtime.emit_line("call $untag_immediate");
                 runtime.emit_line("if\n");
@@ -451,42 +529,51 @@ impl<'a> Compiler<'a> {
                 ..
             } => {
                 let mut runtime = WasmRuntime::new();
-                match function.as_ref() {
-                    ExpressionNode::Identifier { value, id, .. } => {
-                        let binding_id = match self.symbol_table.resolve(*id) {
-                            Some(val) => val,
-                            None => return Err(WasmCompileError::Other(String::from("OH NO"))),
-                        };
-                        let symbol = match self.symbol_table.get_symbol(binding_id) {
-                            Some(val) => val,
-                            None => return Err(WasmCompileError::Other(String::from("OH NO"))),
-                        };
-                        if matches!(symbol.bind_type, BindType::FunctionDeclaration) {
-                            if self.compilation_context.is_global() {
-                                runtime.emit_line("global.get $global_env_ptr");
-                            } else {
-                                runtime.emit_line("local.get $env_ptr");
-                            }
-                            for arg in arguments.iter() {
-                                let expr = self.compile_expression(arg)?;
-                                runtime.emit_line(&expr);
-                            }
-                            runtime.emit_line(&format!("call ${}_direct", value));
-                        } else {
-                            runtime.emit_line(&self.compile_expression(function)?);
-                            runtime.emit_line(&format!("i32.const {}", arguments.len()));
-                            runtime.emit_line("call $create_arg");
-                            for (i, arg) in arguments.iter().enumerate() {
-                                runtime.emit(&format!("i32.const {}", i));
-                                let expr = self.compile_expression(arg)?;
-                                runtime.emit_line(&expr);
-                                runtime.emit_line("call $arg_set");
-                            }
-                            runtime.emit_line("call $call_closure");
-                        }
+
+                // Check if we can use direct call optimization
+                if let ExpressionNode::Identifier { value, id, .. } = function.as_ref() {
+                    // todo: Handle builtin functions. for now hardcode log to test
+                    // has to be string btw
+                    if let Ok(builtin) = BuiltinFunction::from_str(value) {
+                        return self.compile_builtin_call(builtin, arguments);
                     }
-                    _ => {}
+
+                    let binding_id = match self.symbol_table.resolve(*id) {
+                        Some(val) => val,
+                        None => return Err(WasmCompileError::Other(format!("Unresolved function identifier: {}", value))),
+                    };
+                    let symbol = match self.symbol_table.get_symbol(binding_id) {
+                        Some(val) => val,
+                        None => return Err(WasmCompileError::Other(format!("Symbol not found for function: {}", value))),
+                    };
+
+                    if matches!(symbol.bind_type, BindType::FunctionDeclaration) {
+                        // Direct call optimization
+                        if self.compilation_context.is_global() {
+                            runtime.emit_line("global.get $global_env_ptr");
+                        } else {
+                            runtime.emit_line("local.get $env_ptr");
+                        }
+                        for arg in arguments.iter() {
+                            let expr = self.compile_expression(arg)?;
+                            runtime.emit_line(&expr);
+                        }
+                        runtime.emit_line(&format!("call ${}_direct", value));
+                        return Ok(runtime.get_output().to_string());
+                    }
                 }
+
+                // Default closure call
+                runtime.emit_line(&self.compile_expression(function)?);
+                runtime.emit_line(&format!("i32.const {}", arguments.len()));
+                runtime.emit_line("call $create_arg");
+                for (i, arg) in arguments.iter().enumerate() {
+                    runtime.emit(&format!("i32.const {}", i));
+                    let expr = self.compile_expression(arg)?;
+                    runtime.emit_line(&expr);
+                    runtime.emit_line("call $arg_set");
+                }
+                runtime.emit_line("call $call_closure");
                 Ok(runtime.get_output().to_string())
             }
             ExpressionNode::Infix {
@@ -524,6 +611,33 @@ impl<'a> Compiler<'a> {
                         }
                         _ => {}
                     }
+                    return Ok(runtime.get_output().to_string());
+                }
+
+                // Handle short-cirtcuit operators BEFORE evaluating both sides
+                if matches!(operator, InfixOp::And) {
+                    runtime.emit_line(&self.compile_expression(left)?);
+                    runtime.emit_line("call $untag_immediate");
+                    runtime.emit_line("if (result i32)");
+                    runtime.emit_line(&self.compile_expression(right)?);
+                    runtime.emit_line("call $untag_immediate");
+                    runtime.emit_line("else");
+                    runtime.emit_line("i32.const 0");
+                    runtime.emit_line("end");
+                    runtime.emit_line("call $tag_immediate");
+                    return Ok(runtime.get_output().to_string());
+                }
+
+                if matches!(operator, InfixOp::Or) {
+                    runtime.emit_line(&self.compile_expression(left)?);
+                    runtime.emit_line("call $untag_immediate");
+                    runtime.emit_line("if (result i32)");
+                    runtime.emit_line("i32.const 1");
+                    runtime.emit_line("else");
+                    runtime.emit_line(&self.compile_expression(right)?);
+                    runtime.emit_line("call $untag_immediate");
+                    runtime.emit_line("end");
+                    runtime.emit_line("call $tag_immediate");
                     return Ok(runtime.get_output().to_string());
                 }
 
@@ -624,7 +738,7 @@ impl<'a> Compiler<'a> {
                 runtime.emit_line("call $subscript_get");
                 Ok(runtime.get_output().to_string())
             }
-            ExpressionNode::HashMap { pairs, id, .. } => {
+            ExpressionNode::HashMap { pairs, id: _, .. } => {
                 let mut runtime = WasmRuntime::new();
                 runtime.emit_line("call $create_object_empty");
                 for (key, value) in pairs.iter() {
@@ -634,7 +748,6 @@ impl<'a> Compiler<'a> {
                 }
                 Ok(runtime.get_output().to_string())
             }
-            _ => Ok(String::new()),
         }
     }
 
@@ -850,4 +963,94 @@ impl<'a> Compiler<'a> {
             ))),
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::lexer::Lexer;
+    use crate::parser::Parser;
+
+    fn compile_code(code: &str) -> Result<String> {
+        let lexer = Lexer::new(code.to_string());
+        let mut parser = Parser::new(lexer);
+        let ast = parser.parse_program().unwrap();
+        let mut compiler = Compiler::new(&ast);
+        compiler.compile()
+    }
+
+    #[test]
+    fn test_compile_integer() {
+        let wat = compile_code("let x = 42;").unwrap();
+        assert!(wat.contains("i32.const 42"));
+        assert!(wat.contains("call $tag_immediate"));
+    }
+
+    #[test]
+    fn test_compile_arithmetic() {
+        let wat = compile_code("let x = 10 + 5;").unwrap();
+        assert!(wat.contains("i32.const 10"));
+        assert!(wat.contains("i32.const 5"));
+        assert!(wat.contains("call $add_values"));
+    }
+
+    #[test]
+    fn test_compile_print() {
+        let wat = compile_code("print(42);").unwrap();
+        assert!(wat.contains("call $print"));
+        assert!(wat.contains("i32.const 42"));
+    }
+
+    #[test]
+    fn test_compile_function_declaration() {
+        let wat = compile_code("func add(a, b) { return a + b; };").unwrap();
+        assert!(wat.contains("add_direct"));
+        assert!(wat.contains("call $add_values"));
+    }
+
+    #[test]
+    fn test_compile_string_literal() {
+        let wat = compile_code("let s = \"hello\";").unwrap();
+        assert!(wat.contains("call $create_string"));
+        assert!(wat.contains("\"hello\""));
+    }
+
+    #[test]
+    fn test_compile_boolean() {
+        let wat = compile_code("let t = true;").unwrap();
+        assert!(wat.contains("i32.const 1"));
+        assert!(wat.contains("call $tag_immediate"));
+
+        let wat_false = compile_code("let f = false;").unwrap();
+        assert!(wat_false.contains("i32.const 0"));
+    }
+
+    #[test]
+    fn test_compile_if_statement() {
+        let wat = compile_code("if (true) { let x = 1; };").unwrap();
+        assert!(wat.contains("if"));
+        assert!(wat.contains("end"));
+    }
+
+    #[test]
+    fn test_compile_for_loop() {
+        let wat = compile_code("let i = 0; for (i < 10) { print(i); i += 1; };").unwrap();
+        assert!(wat.contains("block $break_"));
+        assert!(wat.contains("loop $continue_"));
+        assert!(wat.contains("call $print"));
+    }
+
+    #[test]
+    fn test_compile_array() {
+        let wat = compile_code("let arr = [1, 2, 3];").unwrap();
+        assert!(wat.contains("call $create_array_empty"));
+        assert!(wat.contains("call $array_set"));
+    }
+
+    #[test]
+    fn test_compile_index_access() {
+        let wat = compile_code("let arr = [1, 2]; let x = arr[0];").unwrap();
+        assert!(wat.contains("call $subscript_get"));
+    }
+
 }

@@ -2,53 +2,53 @@
 // File: 08_advanced.gph
 
 // Closures and first-class functions
-fn makeAdder(x) {
-    fn adder(y) {
+func makeAdder(x) {
+    func adder(y) {
         return x + y;
-    }
+    };
     return adder;
-}
+};
 
 let addFive = makeAdder(5);
 print("addFive(10) = " + addFive(10)); // 15
 
 // Higher-order function
-fn applyTwice(f, x) {
+func applyTwice(f, x) {
     return f(f(x));
-}
+};
 
-fn increment(x) {
+func increment(x) {
     return x + 1;
-}
+};
 
 print("applyTwice(increment, 5) = " + applyTwice(increment, 5)); // 7
 
 // Prime number checker
-fn isPrime(n) {
+func isPrime(n) {
     if (n <= 1) {
         return false;
-    }
+    };
     if (n <= 3) {
         return true;
-    }
+    };
 
     for (let i = 2; i * i <= n; i += 1) {
         if ((n - (n / i) * i) == 0) {
             return false;
-        }
-    }
+        };
+    };
     return true;
-}
+};
 
 print("Prime numbers up to 20:");
 for (let i = 2; i <= 20; i += 1) {
     if (isPrime(i)) {
         print(i);
-    }
-}
+    };
+};
 
 // Sorting array (bubble sort)
-fn bubbleSort(arr, size) {
+func bubbleSort(arr, size) {
     for (let i = 0; i < size; i += 1) {
         for (let j = 0; j < size - i - 1; j += 1) {
             if (arr[j] > arr[j + 1]) {
@@ -56,11 +56,11 @@ fn bubbleSort(arr, size) {
                 let temp = arr[j];
                 arr[j] = arr[j + 1];
                 arr[j + 1] = temp;
-            }
-        }
-    }
+            };
+        };
+    };
     return arr;
-}
+};
 
 let unsorted = [64, 34, 25, 12, 22, 11, 90];
 let sorted = bubbleSort(unsorted, 7);
@@ -68,26 +68,26 @@ let sorted = bubbleSort(unsorted, 7);
 print("Sorted array:");
 for (let i = 0; i < 7; i += 1) {
     print(sorted[i]);
-}
+};
 
 // Binary search (on sorted array)
-fn binarySearch(arr, target, left, right) {
+func binarySearch(arr, target, left, right) {
     if (left > right) {
         return -1;  // Not found
-    }
+    };
 
     let mid = left + ((right - left) / 2);
 
     if (arr[mid] == target) {
         return mid;
-    }
+    };
 
     if (arr[mid] > target) {
         return binarySearch(arr, target, left, mid - 1);
     } else {
         return binarySearch(arr, target, mid + 1, right);
-    }
-}
+    };
+};
 
 let index = binarySearch(sorted, 25, 0, 6);
 print("Index of 25 in sorted array: " + index);

@@ -68,7 +68,7 @@ Learn how to define and call functions.
 
 **Example:**
 ```javascript
-fn add(a, b) {
+func add(a, b) {
     return a + b;
 }
 
@@ -148,7 +148,7 @@ Functions that call themselves.
 
 **Example:**
 ```javascript
-fn factorial(n) {
+func factorial(n) {
     if (n <= 1) {
         return 1;
     }
@@ -173,7 +173,7 @@ Advanced programming techniques.
 
 **Example:**
 ```javascript
-fn isPrime(n) {
+func isPrime(n) {
     if (n <= 1) return false;
     if (n <= 3) return true;
 
@@ -218,14 +218,14 @@ Try modifying the examples:
 2. **Add your own functions:**
    ```javascript
    // Add to 03_functions.gph
-   fn subtract(a, b) {
+   func subtract(a, b) {
        return a - b;
    }
    ```
 
 3. **Create new examples:**
    ```bash
-   echo 'fn hello() { print("My function!"); } hello();' > my_example.gph
+   echo 'func hello() { print("My function!"); } hello();' > my_example.gph
    rustphy run my_example.gph
    ```
 
@@ -248,7 +248,7 @@ for (let i = 0; i < size; i += 1) {
 
 ### Recursive Pattern
 ```javascript
-fn recursive(n) {
+func recursive(n) {
     if (base_case) {
         return base_value;
     }

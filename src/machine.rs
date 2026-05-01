@@ -33,6 +33,17 @@ use crate::{
 };
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
+// WASM bindings for browser console.log
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = console)]
+    fn log(s: &str);
+}
+
 /// Represents a stack frame in the runtime stack.
 ///
 /// Stack frames are created for:
@@ -73,6 +84,9 @@ pub struct Machine {
 
     /// Execution completion flag.
     is_done: bool,
+
+    /// Output buffer for capturing print statements.
+    output: Vec<String>,
 }
 
 impl Machine {
@@ -100,6 +114,7 @@ impl Machine {
             pc: 0,
             env: global_env,
             is_done: false,
+            output: Vec::new(),
         }
     }
 
@@ -121,6 +136,12 @@ impl Machine {
         self.rts.clear();
         self.pc = 0;
         self.is_done = false;
+        self.output.clear();
+    }
+
+    /// Get the captured output from print statements.
+    pub fn get_output(&self) -> String {
+        self.output.join("\n")
     }
 
     /// Determines if a value is truthy in a boolean context.
@@ -407,7 +428,18 @@ impl Machine {
                         args.len()
                     ));
                 }
-                println!("{:?}", args[0]);
+
+                // Capture output to buffer
+                let output_str = format!("{:?}", args[0]);
+                self.output.push(output_str.clone());
+
+                // Use browser console.log in WASM, println! in native
+                #[cfg(target_arch = "wasm32")]
+                log(&output_str);
+
+                #[cfg(not(target_arch = "wasm32"))]
+                println!("{}", output_str);
+
                 // print returns the value that was printed
                 Ok(args[0].clone())
             }

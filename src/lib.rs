@@ -52,13 +52,71 @@ mod wasm {
             .map_err(|e| JsValue::from_str(&format!("Compile error: {}", e)))?;
 
         let mut vm = Machine::new();
-        let result = vm
-            .run(&instructions)
+        vm.run(&instructions)
             .map_err(|e| JsValue::from_str(&format!("Runtime error: {}", e)))?;
 
-        // Convert result to JSON value, then to string to return to JavaScript
-        let json_value = result.to_json_value();
-        Ok(serde_json::to_string(&json_value).unwrap_or_else(|_| "null".to_string()))
+        // Return the captured output from print statements
+        Ok(vm.get_output())
+    }
+
+    /// Compile Rustphy code to WebAssembly Text (WAT) format
+    #[wasm_bindgen]
+    pub fn compile_to_wasm(source_code: String) -> Result<String, JsValue> {
+        #[cfg(feature = "console_error_panic_hook")]
+        console_error_panic_hook::set_once();
+
+        let lexer = Lexer::new(source_code);
+        let mut parser = Parser::new(lexer);
+
+        let program = parser
+            .parse_program()
+            .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
+
+        let mut wasm_compiler = WasmCompiler::new(&program);
+        let wat_output = wasm_compiler
+            .compile()
+            .map_err(|e| JsValue::from_str(&format!("Compile error: {}", e)))?;
+
+        Ok(wat_output)
+    }
+
+    /// Parse Rustphy code and return the AST as JSON
+    #[wasm_bindgen]
+    pub fn parse_to_json(source_code: String) -> Result<String, JsValue> {
+        let lexer = Lexer::new(source_code);
+        let mut parser = Parser::new(lexer);
+
+        let program = parser
+            .parse_program()
+            .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
+
+        serde_json::to_string_pretty(&program)
+            .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
+    }
+
+    /// Compile to bytecode and return as formatted string
+    #[wasm_bindgen]
+    pub fn compile_to_bytecode(source_code: String) -> Result<String, JsValue> {
+        let lexer = Lexer::new(source_code);
+        let mut parser = Parser::new(lexer);
+
+        let program = parser
+            .parse_program()
+            .map_err(|e| JsValue::from_str(&format!("Parse error: {}", e)))?;
+
+        let mut compiler = BytecodeCompiler::new();
+        let instructions = compiler
+            .compile(&program)
+            .map_err(|e| JsValue::from_str(&format!("Compile error: {}", e)))?;
+
+        let output = instructions
+            .iter()
+            .enumerate()
+            .map(|(i, instr)| format!("{:04} {:?}", i, instr))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        Ok(output)
     }
 
     #[wasm_bindgen]
