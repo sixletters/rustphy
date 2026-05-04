@@ -1,0 +1,51 @@
+# Site settings
+title: MIT OpenCourseWare - Compiler Engineering Series
+description: Learning compiler design through MIT's 6.035 Computer Language Engineering course
+author: Harris Maung
+
+# GitHub Pages settings
+url: "https://yourusername.github.io"
+baseurl: "/rustphy"
+
+# Theme
+theme: jekyll-theme-cayman
+# Alternative themes you can try:
+# theme: jekyll-theme-minimal
+# theme: jekyll-theme-slate
+# theme: jekyll-theme-architect
+
+# Markdown processor
+markdown: kramdown
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+
+# Plugins
+plugins:
+  - jekyll-relative-links
+
+# Relative links configuration
+relative_links:
+  enabled: true
+  collections: true
+
+# Include/Exclude - Only include the learning directory
+include:
+  - learning
+
+exclude:
+  - target
+  - .git
+  - .gitignore
+  - Cargo.toml
+  - Cargo.lock
+  - Makefile
+  - scripts
+  - src
+  - bytecode
+  - wasm-binaries
+  - wasm-examples
+  - examples
+  - frontend
+  - docs
+  - README.md
