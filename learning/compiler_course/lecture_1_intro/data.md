@@ -403,11 +403,7 @@ This is the power of compiler optimizations! 🚀
 
 To truly appreciate the impact, let's look at the generated assembly code:
 
-<table>
-<tr>
-<td width="50%">
-
-**Unoptimized Assembly** (~35 instructions per loop iteration)
+#### Unoptimized Assembly (~35 instructions per loop iteration)
 
 ```asm
 .L2:
@@ -438,11 +434,9 @@ To truly appreciate the impact, let's look at the generated assembly code:
     # ... loop condition check
 ```
 
-</td>
-<td width="50%">
+#### Optimized Assembly (~8 instructions per loop iteration)
 
-**Optimized Assembly** (~8 instructions per loop iteration)
-
+**Main loop body:**
 ```asm
 .L5:
     movl    %edi, %eax          # i to eax
@@ -455,7 +449,7 @@ To truly appreciate the impact, let's look at the generated assembly code:
     jle     .L5                 # Loop if <=
 ```
 
-**Loop-invariant code (computed once)**:
+**Loop-invariant code (computed once before the loop):**
 ```asm
     movl    %esi, %eax          # a
     sarl    $31, %edx           # Arithmetic setup
@@ -463,10 +457,6 @@ To truly appreciate the impact, let's look at the generated assembly code:
     sall    $2, %eax            # << 2 (multiply by 4)
     movl    %eax, %r8d          # u = (a/b) << 2
 ```
-
-</td>
-</tr>
-</table>
 
 **The difference is staggering:**
 - **Unoptimized:** ~35 instructions per iteration with multiple memory loads/stores
