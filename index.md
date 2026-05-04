@@ -77,7 +77,7 @@ Each lecture includes:
 ## 🤝 About This Project
 
 This is a learning-in-public project! If you find it helpful:
-- ⭐ Star the [GitHub repo](https://github.com/yourusername/rustphy)
+- ⭐ Star the [GitHub repo](https://github.com/sixletters/rustphy)
 - 📢 Share with others learning compilers
 - 💬 Open an issue with questions or feedback
 - 🐛 Found a mistake? Submit a PR!
