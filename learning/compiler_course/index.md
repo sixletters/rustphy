@@ -46,9 +46,21 @@ I'm working through MIT's Computer Language Engineering course and documenting e
 
 ---
 
-### Lecture 2: Lexical Analysis *(Coming soon...)*
+### [Lecture 2: Lexical Analysis and Regular Expressions](lecture_2/data.md)
 
-**Topics:** Tokenization, regular expressions, finite automata, scanner implementation
+**Topics covered:**
+- Regular expressions and their building blocks
+- Finite-state automata (FSA) - NFAs vs DFAs
+- Converting regex to NFA (Thompson's construction)
+- NFA to DFA conversion (subset construction)
+- Understanding non-determinism and ε-transitions
+- Real-world regex engine implementations
+- Context-free grammars and why regex isn't enough
+- Parse trees, ambiguous grammars, and operator precedence
+- Concrete vs abstract syntax
+- Quiz questions + 5 practice problems + 7 coding challenges!
+
+[**📖 Read Lecture 2 →**](lecture_2/data.md)
 
 ---
 

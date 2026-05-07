@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="{{ site.lang | default: "en-US" }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ page.title }} | {{ site.title }}</title>
+  <link rel="stylesheet" href="{{ '/assets/css/style.css?v=' | append: site.github.build_revision | relative_url }}">
+  <style>
+    .lecture-container {
+      display: flex;
+      max-width: 1400px;
+      margin: 0 auto;
+      gap: 30px;
+      padding: 20px;
+    }
+
+    .sidebar {
+      width: 280px;
+      flex-shrink: 0;
+      position: sticky;
+      top: 20px;
+      height: fit-content;
+      background: #f5f5f5;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .sidebar h3 {
+      margin-top: 0;
+      color: #159957;
+      border-bottom: 2px solid #159957;
+      padding-bottom: 10px;
+      font-size: 1.1em;
+    }
+
+    .sidebar ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .sidebar li {
+      margin: 8px 0;
+    }
+
+    .sidebar a {
+      text-decoration: none;
+      color: #333;
+      display: block;
+      padding: 10px 12px;
+      border-radius: 6px;
+      transition: all 0.2s;
+      font-size: 0.95em;
+      border-left: 3px solid transparent;
+    }
+
+    .sidebar a:hover {
+      background: #e0e0e0;
+      border-left-color: #159957;
+      transform: translateX(2px);
+    }
+
+    .sidebar a.active {
+      background: #159957;
+      color: white;
+      font-weight: bold;
+      border-left-color: #0d5d35;
+    }
+
+    .sidebar .coming-soon {
+      color: #999;
+      padding: 10px 12px;
+      font-style: italic;
+      font-size: 0.9em;
+    }
+
+    .lecture-topics {
+      font-size: 0.85em;
+      color: #666;
+      padding-left: 12px;
+      margin-top: 4px;
+    }
+
+    .content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .quick-links {
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 1px solid #ddd;
+    }
+
+    .quick-links a {
+      font-size: 0.9em;
+    }
+
+    /* Mobile responsive */
+    @media (max-width: 768px) {
+      .lecture-container {
+        flex-direction: column;
+        padding: 10px;
+      }
+
+      .sidebar {
+        width: 100%;
+        position: static;
+        margin-bottom: 20px;
+      }
+    }
+
+    /* Better code block styling in content */
+    .content pre {
+      background: #f6f8fa;
+      border: 1px solid #e1e4e8;
+      border-radius: 6px;
+      padding: 16px;
+      overflow: auto;
+    }
+
+    .content code {
+      background: #f6f8fa;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+
+    .content pre code {
+      background: transparent;
+      padding: 0;
+    }
+  </style>
+</head>
+<body>
+  <header class="page-header" role="banner">
+    <h1 class="project-name">{{ site.title }}</h1>
+    <h2 class="project-tagline">{{ site.description }}</h2>
+    <a href="{{ site.baseurl }}/" class="btn">Home</a>
+    <a href="{{ site.baseurl }}/learning/compiler_course/" class="btn">All Lectures</a>
+    <a href="{{ site.github.repository_url }}" class="btn" target="_blank">View on GitHub</a>
+  </header>
+
+  <main class="main-content" role="main">
+    <div class="lecture-container">
+      <!-- Sidebar Navigation -->
+      <nav class="sidebar">
+        <h3>📚 Lecture Series</h3>
+        <ul>
+          {% for lecture in site.data.lectures.lectures %}
+          <li>
+            <a href="{{ site.baseurl }}{{ lecture.path }}"
+               class="{% if page.lecture_number == lecture.number %}active{% endif %}">
+              <strong>Lecture {{ lecture.number }}</strong>: {{ lecture.title }}
+            </a>
+            {% if page.lecture_number == lecture.number and lecture.topics %}
+            <div class="lecture-topics">
+              {% for topic in lecture.topics %}
+              • {{ topic }}<br>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </li>
+          {% endfor %}
+
+          <li class="coming-soon">
+            📝 Lecture 3: Parsing (Coming soon...)
+          </li>
+          <li class="coming-soon">
+            📝 Lecture 4: Semantic Analysis (Coming soon...)
+          </li>
+        </ul>
+
+        <div class="quick-links">
+          <h3>🎯 On This Page</h3>
+          <ul>
+            <li><a href="#quiz-questions">📝 Quiz Questions</a></li>
+            <li><a href="#practice-problems">🏋️ Practice Problems</a></li>
+            {% if page.lecture_number == 2 %}
+            <li><a href="#coding-challenges">💻 Coding Challenges</a></li>
+            {% endif %}
+          </ul>
+        </div>
+      </nav>
+
+      <!-- Main Content -->
+      <div class="content">
+        {{ content }}
+
+        <footer class="site-footer" style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #eff0f1;">
+          <p style="text-align: center;">
+            <a href="{{ site.baseurl }}/learning/compiler_course/">← Back to All Lectures</a> |
+            <a href="{{ site.baseurl }}/">Home</a>
+          </p>
+        </footer>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

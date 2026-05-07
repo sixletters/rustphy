@@ -1,3 +1,9 @@
+---
+layout: lecture
+title: Lecture 1 - Introduction to Compilers
+lecture_number: 1
+---
+
 # Lecture 1 - Introduction to Compilers
 
 **Author: Harris Maung**
@@ -485,9 +491,11 @@ Which of the following is NOT a requirement for programming languages?
 - C) Expressiveness
 - D) High-level abstractions
 
-<details>
+<details markdown="1">
 <summary>Answer</summary>
-B) Ambiguity - Programming languages must be unambiguous, unlike natural languages!
+
+**B) Ambiguity** - Programming languages must be unambiguous, unlike natural languages!
+
 </details>
 
 ### Question 2: Ordering
@@ -498,19 +506,25 @@ Put the following compiler phases in the correct order:
 - D) Parser (Syntax Analyzer)
 - E) Code Optimizer
 
-<details>
+<details markdown="1">
 <summary>Answer</summary>
-B → D → C → E → A
+
+**B → D → C → E → A**
 
 (Lexical Analyzer → Parser → Semantic Analyzer → Code Optimizer → Code Generator)
+
 </details>
 
 ### Question 3: Short Answer
 What is the difference between an AST (Abstract Syntax Tree) and IR (Intermediate Representation)?
 
-<details>
+<details markdown="1">
 <summary>Answer</summary>
-An AST is a tree structure representing the grammatical structure of the source code, closely tied to the source language's syntax. IR is a lower-level, platform-independent representation that's closer to machine code but still abstract enough to enable optimizations. IR often uses forms like three-address code or SSA (Static Single Assignment).
+
+An **AST** is a tree structure representing the grammatical structure of the source code, closely tied to the source language's syntax. 
+
+**IR** is a lower-level, platform-independent representation that's closer to machine code but still abstract enough to enable optimizations. IR often uses forms like three-address code or SSA (Static Single Assignment).
+
 </details>
 
 ### Question 4: Optimization Identification
@@ -523,7 +537,7 @@ For each optimization, identify its type:
 5. Calculating `sqrt(a)` once instead of twice in the same expression
 6. Changing `for(i=0; i<N; i++) { ... i+1 ...}` to `for(i=1; i<=N; i++) { ... i ...}` to eliminate a temporary variable
 
-<details>
+<details markdown="1">
 <summary>Answers</summary>
 
 1. **Constant Propagation/Constant Folding**
@@ -532,14 +546,19 @@ For each optimization, identify its type:
 4. **Dead Code Elimination**
 5. **Common Subexpression Elimination**
 6. **Induction Variable Optimization (Loop Index Transformation)**
+
 </details>
 
 ### Question 5: Conceptual
 Why do compilers perform optimizations incrementally (in multiple passes) rather than all at once?
 
-<details>
+<details markdown="1">
 <summary>Answer</summary>
-Incremental optimizations make it easier to reason about correctness, enable optimizations to build on each other (one optimization may expose opportunities for another), and make the compiler more maintainable. For example, dead code elimination is more effective after constant propagation has simplified expressions.
+
+Incremental optimizations make it easier to reason about correctness, enable optimizations to build on each other (one optimization may expose opportunities for another), and make the compiler more maintainable. 
+
+For example, dead code elimination is more effective after constant propagation has simplified expressions.
+
 </details>
 
 ---
@@ -567,8 +586,10 @@ int calculate(int n) {
 
 **Your task:** Identify and apply at least 3 optimizations.
 
-<details>
+<details markdown="1">
 <summary>Optimized Solution</summary>
+
+**Step-by-step optimization:**
 
 ```c
 int calculate(int n) {
@@ -585,11 +606,13 @@ int calculate(int n) {
 ```
 
 **Further optimization:**
+
 ```c
 int calculate(int n) {
     return 50 * n;  // The loop just adds 50, n times!
 }
 ```
+
 </details>
 
 ### Practice 2: Loop Optimization
@@ -610,8 +633,10 @@ double physics_simulation(double mass, double velocity, int iterations) {
 
 **Your task:** Optimize this function. Look for common subexpressions and loop-invariant code.
 
-<details>
+<details markdown="1">
 <summary>Optimized Solution</summary>
+
+**Step-by-step optimization:**
 
 ```c
 double physics_simulation(double mass, double velocity, int iterations) {
@@ -628,12 +653,14 @@ double physics_simulation(double mass, double velocity, int iterations) {
 ```
 
 **Further optimization:**
+
 ```c
 double physics_simulation(double mass, double velocity, int iterations) {
     double kinetic = 0.5 * mass * velocity * velocity;
     return 2.0 * iterations * kinetic;  // Loop eliminated entirely!
 }
 ```
+
 </details>
 
 ### Practice 3: Strength Reduction Challenge
@@ -653,8 +680,10 @@ int array_multiply(int arr[], int size, int multiplier) {
 
 **Your task:** Apply loop-invariant code motion, strength reduction (bit shifts), and any other optimizations you can find.
 
-<details>
+<details markdown="1">
 <summary>Optimized Solution</summary>
+
+**Step-by-step optimization:**
 
 ```c
 int array_multiply(int arr[], int size, int multiplier) {
@@ -670,7 +699,8 @@ int array_multiply(int arr[], int size, int multiplier) {
 }
 ```
 
-**Even further:**
+**Even further optimization:**
+
 ```c
 int array_multiply(int arr[], int size, int multiplier) {
     int sum = 0;
@@ -683,6 +713,7 @@ int array_multiply(int arr[], int size, int multiplier) {
     return sum + mult_contribution;  // Add constant after loop
 }
 ```
+
 </details>
 
 ---

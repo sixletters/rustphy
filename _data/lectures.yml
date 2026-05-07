@@ -1,0 +1,19 @@
+lectures:
+  - number: 1
+    title: "Introduction to Compilers"
+    path: "/learning/compiler_course/lecture_1_intro/data.html"
+    topics:
+      - "Compiler Pipeline Architecture"
+      - "8 Optimization Techniques"
+      - "AST vs IR"
+      - "Assembly Code Comparison"
+
+  - number: 2
+    title: "Lexical Analysis & Regular Expressions"
+    path: "/learning/compiler_course/lecture_2/data.html"
+    topics:
+      - "Regular Expressions"
+      - "Finite Automata (NFA/DFA)"
+      - "Subset Construction"
+      - "Context-Free Grammars"
+      - "Parse Trees & Ambiguity"
