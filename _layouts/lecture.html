@@ -8,11 +8,12 @@
   <style>
     .lecture-container {
       display: flex;
-      max-width: 100%;
+      width: 100%;
       margin: 0 auto;
       gap: 20px;
-      padding: 20px;
+      padding: 0;
       position: relative;
+      justify-content: center;
     }
 
     .sidebar {
@@ -121,12 +122,14 @@
       flex: 1;
       min-width: 0;
       max-width: 900px;
-      margin: 0 auto;
-      transition: max-width 0.3s ease;
+      width: 100%;
+      padding: 0 20px;
+      transition: all 0.3s ease;
     }
 
     .content.sidebar-collapsed {
-      max-width: 1100px;
+      max-width: calc(100vw - 100px);
+      padding: 0 50px;
     }
 
     .quick-links {
@@ -143,7 +146,7 @@
     @media (max-width: 768px) {
       .lecture-container {
         flex-direction: column;
-        padding: 10px;
+        padding: 0;
       }
 
       .sidebar {
@@ -163,6 +166,12 @@
 
       .content {
         max-width: 100%;
+        padding: 0 15px;
+      }
+
+      .content.sidebar-collapsed {
+        max-width: 100%;
+        padding: 0 15px;
       }
     }
 
@@ -263,15 +272,19 @@
     const sidebarToggle = document.getElementById('sidebarToggle');
     const sidebar = document.getElementById('sidebar');
     const content = document.querySelector('.content');
+    const lectureContainer = document.querySelector('.lecture-container');
 
     // Check localStorage for saved preference
     const sidebarCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
 
+    // Initialize state
     if (sidebarCollapsed) {
       sidebar.classList.add('collapsed');
       sidebarToggle.classList.add('sidebar-hidden');
       sidebarToggle.textContent = '☰';
       content.classList.add('sidebar-collapsed');
+    } else {
+      sidebarToggle.textContent = '✕';
     }
 
     sidebarToggle.addEventListener('click', function() {
@@ -287,11 +300,6 @@
       // Save preference
       localStorage.setItem('sidebarCollapsed', isCollapsed);
     });
-
-    // Set initial button text if not collapsed
-    if (!sidebarCollapsed) {
-      sidebarToggle.textContent = '✕';
-    }
   </script>
 </body>
 </html>
