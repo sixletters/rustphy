@@ -306,6 +306,10 @@
 
       // Save preference
       localStorage.setItem('sidebarCollapsed', isCollapsed);
+
+      // Debug
+      console.log('Sidebar collapsed:', isCollapsed);
+      console.log('Content classes:', content.className);
     });
   </script>
 </body>
