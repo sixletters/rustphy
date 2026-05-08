@@ -6,6 +6,12 @@
   <title>{{ page.title }} | {{ site.title }}</title>
   <link rel="stylesheet" href="{{ '/assets/css/style.css?v=' | append: site.github.build_revision | relative_url }}">
   <style>
+    /* Override theme's max-width constraint */
+    .main-content {
+      max-width: none !important;
+      padding: 2rem 0 !important;
+    }
+
     .lecture-container {
       display: flex;
       width: 100%;
@@ -121,15 +127,16 @@
     .content {
       flex: 1;
       min-width: 0;
-      max-width: 900px;
       width: 100%;
-      padding: 0 20px;
+      max-width: 850px;
+      padding: 0 2rem;
       transition: all 0.3s ease;
+      margin: 0 auto;
     }
 
     .content.sidebar-collapsed {
-      max-width: calc(100vw - 100px);
-      padding: 0 50px;
+      max-width: 1600px !important;
+      padding: 0 4rem;
     }
 
     .quick-links {
