@@ -2053,6 +2053,164 @@ assert result['y'] == 11
 
 ---
 
+## 📦 Helper Code for Challenge 3: Regex Parser
+
+For Challenge 3 (Regex to NFA), you'll need to parse the regex string into an AST before applying Thompson's construction. Here's the complete parser implementation:
+
+### AST Node Classes
+
+```python
+class RegexNode:
+    """Base class for regex AST nodes"""
+    def to_nfa(self, counter):
+        """Override in subclasses"""
+        raise NotImplementedError
+
+class CharNode(RegexNode):
+    """Leaf: single character"""
+    def __init__(self, char):
+        self.char = char
+
+class ConcatNode(RegexNode):
+    """Binary: left THEN right"""
+    def __init__(self, left, right):
+        self.left = left
+        self.right = right
+
+class ChoiceNode(RegexNode):
+    """Binary: left OR right"""
+    def __init__(self, left, right):
+        self.left = left
+        self.right = right
+
+class StarNode(RegexNode):
+    """Unary: child repeated zero or more times"""
+    def __init__(self, child):
+        self.child = child
+```
+
+### Recursive Descent Parser
+
+```python
+class RegexParser:
+    """
+    Recursive descent parser for regex.
+    
+    Operator precedence (highest to lowest):
+    1. Parentheses ()
+    2. Kleene star *
+    3. Concatenation (implicit)
+    4. Choice |
+    """
+    def __init__(self, text):
+        self.text = text
+        self.pos = 0
+
+    def peek(self):
+        """Look at current character without consuming"""
+        return self.text[self.pos] if self.pos < len(self.text) else None
+
+    def consume(self):
+        """Consume and return current character"""
+        char = self.text[self.pos]
+        self.pos += 1
+        return char
+
+    def parse_choice(self):
+        """Parse choice operator (lowest precedence)"""
+        left = self.parse_concat()
+
+        while self.peek() == '|':
+            self.consume()
+            right = self.parse_concat()
+            left = ChoiceNode(left, right)
+
+        return left
+
+    def parse_concat(self):
+        """Parse concatenation (implicit, higher precedence than |)"""
+        nodes = []
+
+        while self.peek() and self.peek() not in '|)':
+            nodes.append(self.parse_star())
+
+        if not nodes:
+            raise ValueError("Empty expression")
+
+        result = nodes[0]
+        for node in nodes[1:]:
+            result = ConcatNode(result, node)
+
+        return result
+
+    def parse_star(self):
+        """Parse star operator (higher precedence than concatenation)"""
+        atom = self.parse_atom()
+
+        if self.peek() == '*':
+            self.consume()
+            return StarNode(atom)
+
+        return atom
+
+    def parse_atom(self):
+        """Parse atoms: characters and parenthesized expressions"""
+        char = self.peek()
+
+        if char == '(':
+            self.consume()
+            expr = self.parse_choice()
+            if self.peek() == ')':
+                self.consume()
+            else:
+                raise ValueError("Unmatched opening parenthesis")
+            return expr
+
+        elif char and char not in '|*()':
+            self.consume()
+            return CharNode(char)
+
+        elif char is None:
+            raise ValueError("Unexpected end of expression")
+
+        else:
+            raise ValueError(f"Unexpected character: {char}")
+
+
+def parse_regex(regex):
+    """Parse a regex string into an AST."""
+    if not regex:
+        raise ValueError("Empty regex")
+
+    parser = RegexParser(regex)
+    ast = parser.parse_choice()
+
+    if parser.pos < len(regex):
+        raise ValueError(f"Unexpected character at position {parser.pos}")
+
+    return ast
+```
+
+### Usage Example
+
+```python
+# Parse "(a|b)*c"
+ast = parse_regex("(a|b)*c")
+
+# AST structure:
+#     ConcatNode
+#     /        \
+#  StarNode    CharNode('c')
+#     |
+#  ChoiceNode
+#   /      \
+# 'a'      'b'
+
+# Then use Thompson's construction to build NFA from AST
+```
+
+---
+
 ## 📚 Additional Resources for Coding
 
 - **Testing your implementations:** Write comprehensive unit tests for edge cases
