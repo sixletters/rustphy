@@ -9,7 +9,7 @@ enum ScopeType {
     Block,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy, PartialEq, Eq)]
 pub enum BindType {
     FunctionParam,
     FunctionDeclaration,
@@ -298,8 +298,27 @@ impl<'a> SymbolTable<'a> {
                 for_block,
                 ..
             } => {
-                self.walk_expression(condition); // ← ADD THIS
+                self.walk_expression(condition);
                 self.walk_statement(for_block);
+            }
+            StatementNode::ForIn {
+                variable,
+                iterable,
+                body,
+                ..
+            } => {
+                // 1. Define the loop variable (like "let i")
+                if let ExpressionNode::Identifier {
+                    value: name, id, ..
+                } = variable
+                {
+                    let binding_id = self.declare(name, BindType::VariableDeclaraion);
+                    self.resolved.insert(*id, binding_id);
+                }
+                // 2. Walk the iterable (range expression)
+                self.walk_expression(iterable);
+                // 3. Walk the body
+                self.walk_statement(body);
             }
             StatementNode::Return { return_value, .. } => {
                 self.walk_expression(return_value);
@@ -609,5 +628,78 @@ mod tests {
 
         // Should have a, b, and c (all nested blocks should be collected)
         assert_eq!(bindings.len(), 3);
+    }
+
+    #[test]
+    fn test_for_in_loop_variable_binding() {
+        let input = "
+        for (i in 0..10) {
+            let x = i;
+        };
+        ";
+
+        let root = get_ast(input).unwrap();
+        let mut symbol_table = SymbolTable::new(&root);
+        symbol_table.build();
+
+        // Should have bindings for: i (loop var) and x (let inside loop)
+        assert_eq!(symbol_table.bindings.len(), 2);
+
+        // Check that 'i' is declared
+        let i_symbol = symbol_table.get_symbol(0).unwrap();
+        assert_eq!(i_symbol.name, "i");
+        assert_eq!(i_symbol.bind_type, BindType::VariableDeclaraion);
+
+        // Check that 'x' is declared
+        let x_symbol = symbol_table.get_symbol(1).unwrap();
+        assert_eq!(x_symbol.name, "x");
+        assert_eq!(x_symbol.bind_type, BindType::VariableDeclaraion);
+    }
+
+    #[test]
+    fn test_for_in_inclusive_range() {
+        let input = "
+        for (j in 0..=10) {
+            print(j);
+        };
+        ";
+
+        let root = get_ast(input).unwrap();
+        let mut symbol_table = SymbolTable::new(&root);
+        symbol_table.build();
+
+        // Should have binding for j (loop variable)
+        assert_eq!(symbol_table.bindings.len(), 1);
+
+        let j_symbol = symbol_table.get_symbol(0).unwrap();
+        assert_eq!(j_symbol.name, "j");
+        assert_eq!(j_symbol.bind_type, BindType::VariableDeclaraion);
+    }
+
+    #[test]
+    fn test_for_in_nested_loops() {
+        let input = "
+        for (i in 0..5) {
+            for (j in 0..3) {
+                let product = i;
+            };
+        };
+        ";
+
+        let root = get_ast(input).unwrap();
+        let mut symbol_table = SymbolTable::new(&root);
+        symbol_table.build();
+
+        // Should have bindings for: i, j, product
+        assert_eq!(symbol_table.bindings.len(), 3);
+
+        let i_symbol = symbol_table.get_symbol(0).unwrap();
+        assert_eq!(i_symbol.name, "i");
+
+        let j_symbol = symbol_table.get_symbol(1).unwrap();
+        assert_eq!(j_symbol.name, "j");
+
+        let product_symbol = symbol_table.get_symbol(2).unwrap();
+        assert_eq!(product_symbol.name, "product");
     }
 }

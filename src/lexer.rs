@@ -96,6 +96,20 @@ impl Lexer {
                 if Lexer::is_digit(self.peek_char()) {
                     todo!("floats not supported yet")
                 } else {
+                    // Handle logic for DotDot and DotDot equals here
+                    if matches!(self.peek_char(), b'.') {
+                        // consume curr
+                        self.read_char();
+                        if matches!(self.peek_char(), b'=') {
+                            // consume
+                            self.read_char();
+                            self.read_char();
+                            return Token::DotDotEquals;
+                        }
+                        self.read_char();
+                        return Token::DotDot;
+                    }
+
                     self.read_char();
                     return Token::Dot;
                 }
@@ -1077,5 +1091,96 @@ mod tests {
         assert_eq!(lexer2.next_token(), Token::Ident(String::from("x")));
         assert_eq!(lexer2.next_token(), Token::Plus);
         assert_eq!(lexer2.next_token(), Token::Ident(String::from("y")));
+    }
+
+    #[test]
+    fn test_range_operators() {
+        // Test .. (exclusive range)
+        let mut lexer = Lexer::new(String::from("0..10"));
+        assert_eq!(lexer.next_token(), Token::Int(String::from("0")));
+        assert_eq!(lexer.next_token(), Token::DotDot);
+        assert_eq!(lexer.next_token(), Token::Int(String::from("10")));
+        assert_eq!(lexer.next_token(), Token::Eof);
+
+        // Test ..= (inclusive range)
+        let mut lexer2 = Lexer::new(String::from("0..=10"));
+        assert_eq!(lexer2.next_token(), Token::Int(String::from("0")));
+        assert_eq!(lexer2.next_token(), Token::DotDotEquals);
+        assert_eq!(lexer2.next_token(), Token::Int(String::from("10")));
+        assert_eq!(lexer2.next_token(), Token::Eof);
+
+        // Test single dot still works
+        let mut lexer3 = Lexer::new(String::from("obj.field"));
+        assert_eq!(lexer3.next_token(), Token::Ident(String::from("obj")));
+        assert_eq!(lexer3.next_token(), Token::Dot);
+        assert_eq!(lexer3.next_token(), Token::Ident(String::from("field")));
+        assert_eq!(lexer3.next_token(), Token::Eof);
+    }
+
+    #[test]
+    fn test_in_keyword() {
+        // Test 'in' keyword
+        let mut lexer = Lexer::new(String::from("i in list"));
+        assert_eq!(lexer.next_token(), Token::Ident(String::from("i")));
+        assert_eq!(lexer.next_token(), Token::In);
+        assert_eq!(lexer.next_token(), Token::Ident(String::from("list")));
+        assert_eq!(lexer.next_token(), Token::Eof);
+
+        // Test that 'in' is a keyword, not an identifier
+        let mut lexer2 = Lexer::new(String::from("in"));
+        assert_eq!(lexer2.next_token(), Token::In);
+        assert_ne!(lexer2.next_token(), Token::Ident(String::from("in")));
+    }
+
+    #[test]
+    fn test_for_in_range_loop() {
+        // Test complete for-in loop with exclusive range
+        let mut lexer = Lexer::new(String::from("for (i in 0..10) {}"));
+
+        assert_eq!(lexer.next_token(), Token::For);
+        assert_eq!(lexer.next_token(), Token::LParen);
+        assert_eq!(lexer.next_token(), Token::Ident(String::from("i")));
+        assert_eq!(lexer.next_token(), Token::In);
+        assert_eq!(lexer.next_token(), Token::Int(String::from("0")));
+        assert_eq!(lexer.next_token(), Token::DotDot);
+        assert_eq!(lexer.next_token(), Token::Int(String::from("10")));
+        assert_eq!(lexer.next_token(), Token::RParen);
+        assert_eq!(lexer.next_token(), Token::LBrace);
+        assert_eq!(lexer.next_token(), Token::RBrace);
+        assert_eq!(lexer.next_token(), Token::Eof);
+    }
+
+    #[test]
+    fn test_for_in_range_inclusive_loop() {
+        // Test complete for-in loop with inclusive range
+        let mut lexer = Lexer::new(String::from("for (i in 0..=10) { print(i); }"));
+
+        assert_eq!(lexer.next_token(), Token::For);
+        assert_eq!(lexer.next_token(), Token::LParen);
+        assert_eq!(lexer.next_token(), Token::Ident(String::from("i")));
+        assert_eq!(lexer.next_token(), Token::In);
+        assert_eq!(lexer.next_token(), Token::Int(String::from("0")));
+        assert_eq!(lexer.next_token(), Token::DotDotEquals);
+        assert_eq!(lexer.next_token(), Token::Int(String::from("10")));
+        assert_eq!(lexer.next_token(), Token::RParen);
+        assert_eq!(lexer.next_token(), Token::LBrace);
+        assert_eq!(lexer.next_token(), Token::Ident(String::from("print")));
+        assert_eq!(lexer.next_token(), Token::LParen);
+        assert_eq!(lexer.next_token(), Token::Ident(String::from("i")));
+        assert_eq!(lexer.next_token(), Token::RParen);
+        assert_eq!(lexer.next_token(), Token::Semicolon);
+        assert_eq!(lexer.next_token(), Token::RBrace);
+        assert_eq!(lexer.next_token(), Token::Eof);
+    }
+
+    #[test]
+    fn test_range_with_expressions() {
+        // Test ranges with variable expressions
+        let mut lexer = Lexer::new(String::from("start..end"));
+
+        assert_eq!(lexer.next_token(), Token::Ident(String::from("start")));
+        assert_eq!(lexer.next_token(), Token::DotDot);
+        assert_eq!(lexer.next_token(), Token::Ident(String::from("end")));
+        assert_eq!(lexer.next_token(), Token::Eof);
     }
 }

@@ -68,6 +68,12 @@ impl<'a> EscapeAnalyzer<'a> {
             StatementNode::For { for_block, .. } => {
                 self.walk_statement(for_block);
             }
+            StatementNode::ForIn {
+                iterable, body, ..
+            } => {
+                self.walk_expression(iterable);
+                self.walk_statement(body);
+            }
             _ => {}
         }
     }
@@ -420,5 +426,72 @@ mod tests {
             ea.does_escape(0),
             "x should escape (captured by inner in if block)"
         );
+    }
+
+    #[test]
+    fn test_for_in_loop_variable_no_escape() {
+        let input = "
+        for (i in 0..10) {
+            let x = i * 2;
+        };
+        ";
+
+        let root = get_ast(input).unwrap();
+        let mut symbol_table = SymbolTable::new(&root);
+        symbol_table.build();
+
+        let ea = EscapeAnalysis::analyze(&root, &symbol_table);
+
+        // i (binding 0) does not escape - only used within loop
+        // x (binding 1) does not escape - only used within loop
+        assert_eq!(false, ea.does_escape(0), "i should not escape");
+        assert_eq!(false, ea.does_escape(1), "x should not escape");
+    }
+
+    #[test]
+    fn test_for_in_loop_variable_captured_escapes() {
+        let input = "
+        for (i in 0..5) {
+            func capture() {
+                return i;
+            };
+        };
+        ";
+
+        let root = get_ast(input).unwrap();
+        let mut symbol_table = SymbolTable::new(&root);
+        symbol_table.build();
+
+        let ea = EscapeAnalysis::analyze(&root, &symbol_table);
+
+        // i (binding 0) escapes - captured by inner function
+        assert_eq!(
+            true,
+            ea.does_escape(0),
+            "i should escape (captured by closure in loop body)"
+        );
+    }
+
+    #[test]
+    fn test_for_in_outer_variable_captured() {
+        let input = "
+        let x = 1;
+        for (i in 0..10) {
+            func inner() {
+                return x + i;
+            };
+        };
+        ";
+
+        let root = get_ast(input).unwrap();
+        let mut symbol_table = SymbolTable::new(&root);
+        symbol_table.build();
+
+        let ea = EscapeAnalysis::analyze(&root, &symbol_table);
+
+        // x (binding 0) escapes - captured by inner()
+        // i (binding 1) escapes - captured by inner()
+        assert_eq!(true, ea.does_escape(0), "x should escape");
+        assert_eq!(true, ea.does_escape(1), "i should escape");
     }
 }

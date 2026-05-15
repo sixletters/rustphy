@@ -385,11 +385,15 @@ impl<'a> Compiler<'a> {
             StatementNode::FuncDeclr {
                 identifier, func, ..
             } => {
-                if let (ExpressionNode::Identifier { value, .. }, ExpressionNode::Function { .. }) = (identifier, func) {
+                if let (ExpressionNode::Identifier { value, .. }, ExpressionNode::Function { .. }) =
+                    (identifier, func)
+                {
                     self.compile_function_implementations(Some(value.to_string()), func)?;
                     Ok(String::new())
                 } else {
-                    Err(WasmCompileError::Other("FuncDeclr must have identifier and function".to_string()))
+                    Err(WasmCompileError::Other(
+                        "FuncDeclr must have identifier and function".to_string(),
+                    ))
                 }
             }
             StatementNode::For {
@@ -420,6 +424,78 @@ impl<'a> Compiler<'a> {
             }
             StatementNode::Break { .. } => Ok(format!("br $break_{}", self.loop_counter)),
             StatementNode::Continue { .. } => Ok(format!("br $continue_{}", self.loop_counter)),
+            StatementNode::ForIn {
+                variable,
+                iterable,
+                body,
+                ..
+            } => {
+                let mut runtime = WasmRuntime::new();
+
+                // Extract variable name
+                let var_name = match variable {
+                    ExpressionNode::Identifier { value, .. } => value.clone(),
+                    _ => {
+                        return Err(WasmCompileError::Other(
+                            "ForIn variable must be an identifier".to_string(),
+                        ))
+                    }
+                };
+
+                // Extract range bounds
+                let (start_expr, end_expr, inclusive) = match &**iterable {
+                    ExpressionNode::Range {
+                        start,
+                        end,
+                        inclusive,
+                        ..
+                    } => (start.as_ref(), end.as_ref(), *inclusive),
+                    _ => {
+                        return Err(WasmCompileError::Other(
+                            "ForIn iterable must be a Range expression".to_string(),
+                        ))
+                    }
+                };
+
+                // 1. Initialize: let i = start
+                runtime.emit_line(&self.compile_expression(start_expr)?);
+                runtime.emit_line(&format!("local.set ${}", var_name));
+
+                // 2. Create loop structure
+                self.loop_counter += 1;
+                runtime.emit_line(&format!("(block $break_{}", self.loop_counter));
+                runtime.emit_line(&format!("(loop $continue_{}", self.loop_counter));
+
+                // 3. Condition: i < end (or i <= end for inclusive)
+                runtime.emit_line(&format!("local.get ${}", var_name));
+                runtime.emit_line(&self.compile_expression(end_expr)?);
+                if inclusive {
+                    runtime.emit_line("call $le_values");
+                } else {
+                    runtime.emit_line("call $lt_values");
+                }
+                runtime.emit_line("call $untag_immediate");
+                runtime.emit_line("i32.eqz");
+                runtime.emit_line(&format!("br_if $break_{}", self.loop_counter));
+
+                // 4. Execute body
+                runtime.emit_line(&self.compile_statement(body)?);
+
+                // 5. Increment: i += 1
+                runtime.emit_line(&format!("local.get ${}", var_name));
+                runtime.emit_line("i32.const 1");
+                runtime.emit_line("call $tag_immediate");
+                runtime.emit_line("call $add_values");
+                runtime.emit_line(&format!("local.set ${}", var_name));
+
+                // 6. Jump back to loop
+                runtime.emit_line(&format!("br $continue_{}", self.loop_counter));
+                runtime.emit_line(")");
+                runtime.emit_line(")");
+                self.loop_counter -= 1;
+
+                Ok(runtime.get_output().to_string())
+            }
         }
     }
     pub fn compile_expression(&mut self, node: &ExpressionNode) -> Result<String> {
@@ -450,7 +526,12 @@ impl<'a> Compiler<'a> {
                             let mut runtime = WasmRuntime::new();
                             let func_declr_idx = match self.function_lookup_map.get(value) {
                                 Some(val) => val,
-                                None => return Err(WasmCompileError::Other(format!("Function '{}' not found in lookup map", value))),
+                                None => {
+                                    return Err(WasmCompileError::Other(format!(
+                                        "Function '{}' not found in lookup map",
+                                        value
+                                    )));
+                                }
                             };
                             runtime.emit_line(&format!("i32.const {}", func_declr_idx));
                             if self.compilation_context.is_global() {
@@ -540,11 +621,21 @@ impl<'a> Compiler<'a> {
 
                     let binding_id = match self.symbol_table.resolve(*id) {
                         Some(val) => val,
-                        None => return Err(WasmCompileError::Other(format!("Unresolved function identifier: {}", value))),
+                        None => {
+                            return Err(WasmCompileError::Other(format!(
+                                "Unresolved function identifier: {}",
+                                value
+                            )));
+                        }
                     };
                     let symbol = match self.symbol_table.get_symbol(binding_id) {
                         Some(val) => val,
-                        None => return Err(WasmCompileError::Other(format!("Symbol not found for function: {}", value))),
+                        None => {
+                            return Err(WasmCompileError::Other(format!(
+                                "Symbol not found for function: {}",
+                                value
+                            )));
+                        }
                     };
 
                     if matches!(symbol.bind_type, BindType::FunctionDeclaration) {
@@ -747,6 +838,13 @@ impl<'a> Compiler<'a> {
                     runtime.emit_line("call $object_set");
                 }
                 Ok(runtime.get_output().to_string())
+            }
+            ExpressionNode::Range { .. } => {
+                // Range expressions are only used in ForIn loops and are desugared during compilation
+                // They should never be compiled as standalone expressions
+                Err(WasmCompileError::Other(
+                    "Range expressions can only be used in ForIn loops".to_string(),
+                ))
             }
         }
     }
@@ -1053,4 +1151,29 @@ mod tests {
         assert!(wat.contains("call $subscript_get"));
     }
 
+    #[test]
+    fn test_compile_for_in_exclusive_range() {
+        let wat = compile_code("for (i in 0..5) { print(i); };").unwrap();
+        assert!(wat.contains("block $break_"));
+        assert!(wat.contains("loop $continue_"));
+        assert!(wat.contains("call $lt_values"));
+        assert!(wat.contains("call $add_values"));
+    }
+
+    #[test]
+    fn test_compile_for_in_inclusive_range() {
+        let wat = compile_code("for (i in 0..=10) { print(i); };").unwrap();
+        assert!(wat.contains("block $break_"));
+        assert!(wat.contains("loop $continue_"));
+        assert!(wat.contains("call $le_values"));
+        assert!(wat.contains("call $add_values"));
+    }
+
+    #[test]
+    fn test_compile_for_in_with_body() {
+        let wat = compile_code("for (i in 1..3) { let x = i * 2; print(x); };").unwrap();
+        assert!(wat.contains("block $break_"));
+        assert!(wat.contains("loop $continue_"));
+        assert!(wat.contains("call $print"));
+    }
 }

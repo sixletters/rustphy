@@ -212,4 +212,5 @@ pub enum BINOPS {
     And,      // "&&"
     Or,       // "||"
     Assign,
+    In, // In
 }

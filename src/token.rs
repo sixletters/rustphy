@@ -42,6 +42,8 @@ pub enum Token {
     RSquare,
     Colon,
     Dot,
+    DotDot,
+    DotDotEquals,
 
     // Keywords
     Function,
@@ -54,6 +56,7 @@ pub enum Token {
     Return,
     Break,
     Continue,
+    In,
 }
 
 impl Token {
@@ -101,6 +104,9 @@ impl Token {
             Token::Colon => ":".to_string(),
             Token::Dot => ".".to_string(),
             Token::Conditional => "?".to_string(),
+            Token::In => "in".to_string(),
+            Token::DotDot => "..".to_string(),
+            Token::DotDotEquals => "..=".to_string(),
         }
     }
 }
@@ -117,6 +123,7 @@ pub fn lookup_identifier(ident: &str) -> Token {
         "for" => Token::For,
         "break" => Token::Break,
         "continue" => Token::Continue,
+        "in" => Token::In,
         _ => Token::Ident(ident.to_string()),
     }
 }

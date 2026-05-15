@@ -77,6 +77,8 @@ pub enum InfixOp {
     Or,
     /// Assign
     Assign,
+    /// In
+    In,
 }
 
 impl From<InfixOp> for BINOPS {
@@ -104,6 +106,7 @@ impl From<InfixOp> for BINOPS {
             InfixOp::And => BINOPS::And,
             InfixOp::Or => BINOPS::Or,
             InfixOp::Assign => BINOPS::Assign,
+            InfixOp::In => BINOPS::In,
         }
     }
 }
@@ -122,6 +125,7 @@ impl fmt::Display for InfixOp {
             InfixOp::And => "&&",
             InfixOp::Or => "||",
             InfixOp::Assign => "=",
+            InfixOp::In => "in",
         };
         write!(f, "{}", s)
     }
@@ -200,6 +204,13 @@ pub enum StatementNode {
         token: Token,
         id: i32,
     },
+    ForIn {
+        token: Token,
+        variable: ExpressionNode,      // The loop variable: "i"
+        iterable: Box<ExpressionNode>, // Range or array: 0..10
+        body: Box<StatementNode>,      // Loop body
+        id: i32,
+    },
 }
 
 impl Clone for StatementNode {
@@ -276,6 +287,19 @@ impl Clone for StatementNode {
             },
             StatementNode::Continue { token, id } => StatementNode::Continue {
                 token: token.clone(),
+                id: *id,
+            },
+            StatementNode::ForIn {
+                token,
+                variable,
+                iterable,
+                body,
+                id,
+            } => StatementNode::ForIn {
+                token: token.clone(),
+                variable: variable.clone(),
+                iterable: iterable.clone(),
+                body: body.clone(),
                 id: *id,
             },
         }
@@ -367,6 +391,13 @@ pub enum ExpressionNode {
         pairs: Vec<(Box<ExpressionNode>, Box<ExpressionNode>)>,
         id: i32,
     },
+    Range {
+        token: Token, // The '..' or '..=' token
+        start: Box<ExpressionNode>,
+        end: Box<ExpressionNode>,
+        inclusive: bool,
+        id: i32,
+    },
 }
 
 /// Trait implemented by all AST nodes.
@@ -403,6 +434,7 @@ impl AstNode for Node {
                 ExpressionNode::Index { token, .. } => token.clone(),
                 ExpressionNode::HashMap { token, .. } => token.clone(),
                 ExpressionNode::Ternary { token, .. } => token.clone(),
+                ExpressionNode::Range { token, .. } => token.clone(),
             },
             Self::StatementNode(val) => match val {
                 StatementNode::Program { statements, .. } => {
@@ -421,56 +453,13 @@ impl AstNode for Node {
                 StatementNode::FuncDeclr { token, .. } => token.clone(),
                 StatementNode::Break { token, .. } => token.clone(),
                 StatementNode::Continue { token, .. } => token.clone(),
+                StatementNode::ForIn { token, .. } => token.clone(),
             },
         }
     }
 
     fn token_literal(&self) -> String {
-        let token = self.get_token();
-        match token {
-            Token::Illegal(c) => c.to_string(),
-            Token::Eof => "EOF".to_string(),
-            Token::Ident(s) => s,
-            Token::Int(s) => s,
-            Token::Str(s) => s,
-            Token::Assign => "=".to_string(),
-            Token::Plus => "+".to_string(),
-            Token::Minus => "-".to_string(),
-            Token::Bang => "!".to_string(),
-            Token::Asterisk => "*".to_string(),
-            Token::Slash => "/".to_string(),
-            Token::Lt => "<".to_string(),
-            Token::Gt => ">".to_string(),
-            Token::Eq => "==".to_string(),
-            Token::NotEq => "!=".to_string(),
-            Token::And => "&&".to_string(),
-            Token::Or => "||".to_string(),
-            Token::PlusAssign => "+=".to_string(),
-            Token::MinusAssign => "-=".to_string(),
-            Token::AsteriskAssign => "*=".to_string(),
-            Token::SlashAssign => "/=".to_string(),
-            Token::Comma => ",".to_string(),
-            Token::Semicolon => ";".to_string(),
-            Token::LParen => "(".to_string(),
-            Token::RParen => ")".to_string(),
-            Token::LBrace => "{".to_string(),
-            Token::RBrace => "}".to_string(),
-            Token::Function => "func".to_string(),
-            Token::For => "for".to_string(),
-            Token::Let => "let".to_string(),
-            Token::True => "true".to_string(),
-            Token::False => "false".to_string(),
-            Token::If => "if".to_string(),
-            Token::Else => "else".to_string(),
-            Token::Return => "return".to_string(),
-            Token::LSquare => "[".to_string(),
-            Token::RSquare => "]".to_string(),
-            Token::Break => "break".to_string(),
-            Token::Continue => "continue".to_string(),
-            Token::Colon => ":".to_string(),
-            Token::Dot => ".".to_string(),
-            Token::Conditional => "?".to_string(),
-        }
+        self.get_token().to_string()
     }
 
     fn to_string(&self) -> String {
@@ -607,6 +596,20 @@ impl AstNode for Node {
                         .collect();
                     format!("[{}]", args.join(", "))
                 }
+                ExpressionNode::Range {
+                    start,
+                    end,
+                    inclusive,
+                    ..
+                } => {
+                    let op = if *inclusive { "..=" } else { ".." };
+                    format!(
+                        "{}{}{}",
+                        Node::ExpressionNode((**start).clone()).to_string(),
+                        op,
+                        Node::ExpressionNode((**end).clone()).to_string()
+                    )
+                }
             },
             Self::StatementNode(val) => match val {
                 StatementNode::Program {
@@ -680,6 +683,19 @@ impl AstNode for Node {
                         "let {} = {};",
                         Node::ExpressionNode(identifier.clone()).to_string(),
                         Node::ExpressionNode(func.clone()).to_string()
+                    )
+                }
+                StatementNode::ForIn {
+                    variable,
+                    iterable,
+                    body,
+                    ..
+                } => {
+                    format!(
+                        "for ({} in {}) {};",
+                        Node::ExpressionNode(variable.clone()).to_string(),
+                        Node::ExpressionNode((**iterable).clone()).to_string(),
+                        Node::StatementNode((**body).clone()).to_string()
                     )
                 }
             },

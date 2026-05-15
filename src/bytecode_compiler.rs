@@ -308,6 +308,126 @@ impl Compiler {
                 }
                 Ok(())
             }
+            StatementNode::ForIn {
+                variable,
+                iterable,
+                body,
+                ..
+            } => {
+                // Desugar: for (i in start..end) { body }
+                // Into:    let i = start; for (i < end) { body; i += 1; }
+
+                // Extract loop variable name
+                let var_name = match variable {
+                    ExpressionNode::Identifier { value, .. } => value.clone(),
+                    _ => {
+                        return Err(format!(
+                            "Compilation error: ForIn loop variable must be an identifier, got {:?}",
+                            variable
+                        ));
+                    }
+                };
+
+                // Extract range bounds
+                let (start_expr, end_expr, inclusive) = match &**iterable {
+                    ExpressionNode::Range {
+                        start,
+                        end,
+                        inclusive,
+                        ..
+                    } => (start, end, *inclusive),
+                    _ => {
+                        return Err(format!(
+                            "Compilation error: ForIn loop currently only supports range expressions, got {:?}",
+                            iterable
+                        ));
+                    }
+                };
+
+                // 1. Initialize loop variable: let i = start
+                self.compile_expression(start_expr)?;
+                self.instructions.push(Instruction::ASSIGN {
+                    sym: var_name.clone(),
+                });
+                self.instructions.push(Instruction::POP); // Pop the assigned value
+                self.wc += 2;
+
+                // 2. Loop condition check: i < end (or i <= end for inclusive)
+                let start_of_conditional = self.wc;
+                let loop_ctx = LoopContext {
+                    continue_addr: self.wc as usize,
+                    break_patchs: vec![],
+                };
+                self.loop_context_stack.push(loop_ctx);
+
+                // Load loop variable
+                self.compile_expression(variable)?;
+                // Load end value
+                self.compile_expression(end_expr)?;
+
+                // Compare: i < end or i <= end
+                let comparison_op = if inclusive {
+                    crate::instruction::BINOPS::Le // <=
+                } else {
+                    crate::instruction::BINOPS::Lt // <
+                };
+                self.instructions
+                    .push(Instruction::BINOP { ops: comparison_op });
+                self.wc += 1;
+
+                // Jump out if condition is false
+                self.instructions.push(Instruction::JOF {
+                    addr: self.wc as usize,
+                });
+                let saved_jof_idx = self.wc;
+                self.wc += 1;
+
+                // 3. Compile loop body
+                self.compile_statement(body)?;
+
+                // 4. Increment loop variable: i += 1
+                // Load current value of i
+                self.compile_expression(variable)?;
+                // Load constant 1
+                self.instructions.push(Instruction::LDCN { val: 1 });
+                self.wc += 1;
+                // Add them: i + 1
+                self.instructions.push(Instruction::BINOP {
+                    ops: crate::instruction::BINOPS::Add,
+                });
+                self.wc += 1;
+                // Assign back to i
+                self.instructions.push(Instruction::ASSIGN {
+                    sym: var_name.clone(),
+                });
+                self.instructions.push(Instruction::POP); // Pop the assigned value
+                self.wc += 2;
+
+                // 5. Jump back to condition
+                self.instructions.push(Instruction::GOTO {
+                    addr: start_of_conditional as usize,
+                });
+                self.wc += 1;
+
+                // 6. Patch the JOF to jump to end of loop
+                self.instructions[saved_jof_idx as usize] = Instruction::JOF {
+                    addr: self.wc as usize,
+                };
+
+                // 7. Patch break statements
+                let top_ctx = match self.loop_context_stack.pop() {
+                    Some(val) => val,
+                    None => return Err(format!("ERROR: loop context stack corrupted")),
+                };
+
+                for break_idx in top_ctx.break_patchs.iter() {
+                    self.instructions[*break_idx] = Instruction::GOTO {
+                        addr: self.wc as usize,
+                    };
+                }
+
+                Ok(())
+            }
         }
     }
 

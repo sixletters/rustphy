@@ -138,7 +138,8 @@ impl Parser {
             | Token::SlashAssign => Precedence::ASSIGN,
             Token::And | Token::Or => Precedence::LOGICAL,
             Token::Eq | Token::NotEq => Precedence::EQUALS,
-            Token::Lt | Token::Gt => Precedence::LESSGREATER,
+            Token::Lt | Token::Gt | Token::In => Precedence::LESSGREATER,
+            Token::DotDot | Token::DotDotEquals => Precedence::SUM, // Range has same precedence as +/-
             Token::Plus | Token::Minus => Precedence::SUM,
             Token::Asterisk | Token::Slash => Precedence::PRODUCT,
             Token::Dot => Precedence::CALL,
@@ -213,16 +214,36 @@ impl Parser {
                     return Err(String::from("Expected '(' after 'for' keyword"));
                 }
                 self.consume_token();
-                let condition = self.parse_expression(Precedence::Lowest)?;
+                let inner = self.parse_expression(Precedence::Lowest)?;
                 if !matches!(self.curr_token, Token::RParen) {
                     return Err(String::from("Expected ')' after 'for' keyword"));
                 }
                 self.consume_token();
-                StatementNode::For {
-                    token: Token::For,
-                    condition: condition,
-                    for_block: Box::new(self.parse_statement(false)?),
-                    id: self.consume_id(),
+
+                // Check if it's a ForIn pattern: `i in range`
+                if let ExpressionNode::Infix {
+                    operator: InfixOp::In,
+                    left,
+                    right,
+                    ..
+                } = inner.clone()
+                {
+                    // It's a ForIn loop!
+                    StatementNode::ForIn {
+                        token: Token::For,
+                        variable: *left,
+                        iterable: right,
+                        body: Box::new(self.parse_statement(false)?),
+                        id: self.consume_id(),
+                    }
+                } else {
+                    // Regular For loop
+                    StatementNode::For {
+                        token: Token::For,
+                        condition: inner,
+                        for_block: Box::new(self.parse_statement(false)?),
+                        id: self.consume_id(),
+                    }
                 }
             }
             Token::Function => {
@@ -619,6 +640,18 @@ impl Parser {
                     id: self.consume_id(),
                 })
             }
+            Token::DotDot | Token::DotDotEquals => {
+                // Range expression: start..end or start..=end
+                let inclusive = matches!(curr_token, Token::DotDotEquals);
+                let end = self.parse_expression(self.get_precedence(&curr_token))?;
+                Ok(ExpressionNode::Range {
+                    token: curr_token,
+                    start: Box::new(left_exp.clone()),
+                    end: Box::new(end),
+                    inclusive,
+                    id: self.consume_id(),
+                })
+            }
             _ => {
                 // Handle compound assignment operators by desugaring them
                 // e.g., x += 5 becomes x = x + 5
@@ -633,6 +666,7 @@ impl Parser {
                     Token::NotEq => (InfixOp::NotEq, None),
                     Token::And => (InfixOp::And, None),
                     Token::Or => (InfixOp::Or, None),
+                    Token::In => (InfixOp::In, None),
                     Token::Assign => (InfixOp::Assign, None),
                     Token::PlusAssign => (InfixOp::Assign, Some(InfixOp::Add)),
                     Token::MinusAssign => (InfixOp::Assign, Some(InfixOp::Subtract)),
@@ -1171,6 +1205,212 @@ mod tests {
                 );
             }
             Err(e) => panic!("Expected expression node {}", e),
+        }
+    }
+
+    #[test]
+    fn test_parse_range_expression() {
+        // Test exclusive range: 0..10
+        let input = "0..10";
+        let expression = parse_expression(input);
+        match expression {
+            Ok(ExpressionNode::Range {
+                start,
+                end,
+                inclusive,
+                ..
+            }) => {
+                assert!(!inclusive, "Expected exclusive range (..)");
+                assert!(matches!(*start, ExpressionNode::Integer { value: 0, .. }));
+                assert!(matches!(*end, ExpressionNode::Integer { value: 10, .. }));
+            }
+            Ok(other) => panic!("Expected Range expression, got {:?}", other),
+            Err(e) => panic!("Parse error: {}", e),
+        }
+
+        // Test inclusive range: 0..=10
+        let input = "0..=10";
+        let expression = parse_expression(input);
+        match expression {
+            Ok(ExpressionNode::Range {
+                start,
+                end,
+                inclusive,
+                ..
+            }) => {
+                assert!(inclusive, "Expected inclusive range (..=)");
+                assert!(matches!(*start, ExpressionNode::Integer { value: 0, .. }));
+                assert!(matches!(*end, ExpressionNode::Integer { value: 10, .. }));
+            }
+            Ok(other) => panic!("Expected Range expression, got {:?}", other),
+            Err(e) => panic!("Parse error: {}", e),
+        }
+
+        // Test range with variables: start..end
+        let input = "start..end";
+        let expression = parse_expression(input);
+        match expression {
+            Ok(ExpressionNode::Range {
+                start,
+                end,
+                inclusive,
+                ..
+            }) => {
+                assert!(!inclusive);
+                assert!(matches!(
+                    *start,
+                    ExpressionNode::Identifier { value, .. } if value == "start"
+                ));
+                assert!(matches!(
+                    *end,
+                    ExpressionNode::Identifier { value, .. } if value == "end"
+                ));
+            }
+            Ok(other) => panic!("Expected Range expression, got {:?}", other),
+            Err(e) => panic!("Parse error: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_parse_in_expression() {
+        // Test "i in range" expression
+        let input = "i in 0..10";
+        let expression = parse_expression(input);
+        match expression {
+            Ok(ExpressionNode::Infix {
+                operator: InfixOp::In,
+                left,
+                right,
+                ..
+            }) => {
+                // Left should be identifier "i"
+                assert!(matches!(
+                    *left,
+                    ExpressionNode::Identifier { value, .. } if value == "i"
+                ));
+                // Right should be Range
+                assert!(matches!(*right, ExpressionNode::Range { .. }));
+            }
+            Ok(other) => panic!("Expected Infix (In) expression, got {:?}", other),
+            Err(e) => panic!("Parse error: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_parse_for_in_statement() {
+        // Test basic for-in loop: for (i in 0..10) { print(i); };
+        let input = "for (i in 0..10) { print(i); };";
+        let statement = parse_statement(input);
+        match statement {
+            Ok(StatementNode::ForIn {
+                variable,
+                iterable,
+                body,
+                ..
+            }) => {
+                // Variable should be "i"
+                assert!(matches!(
+                    variable,
+                    ExpressionNode::Identifier { value, .. } if value == "i"
+                ));
+                // Iterable should be Range
+                assert!(matches!(*iterable, ExpressionNode::Range { .. }));
+                // Body should be a block
+                assert!(matches!(*body, StatementNode::Block { .. }));
+            }
+            Ok(other) => panic!("Expected ForIn statement, got {:?}", other),
+            Err(e) => panic!("Parse error: {}", e),
+        }
+
+        // Test for-in with inclusive range
+        let input = "for (i in 0..=10) { print(i); };";
+        let statement = parse_statement(input);
+        match statement {
+            Ok(StatementNode::ForIn { iterable, .. }) => {
+                if let ExpressionNode::Range { inclusive, .. } = *iterable {
+                    assert!(inclusive, "Expected inclusive range (..=)");
+                } else {
+                    panic!("Expected Range in iterable");
+                }
+            }
+            Ok(other) => panic!("Expected ForIn statement, got {:?}", other),
+            Err(e) => panic!("Parse error: {}", e),
+        }
+
+        // Test for-in with variable range
+        let input = "for (i in start..end) { print(i); };";
+        let statement = parse_statement(input);
+        match statement {
+            Ok(StatementNode::ForIn { .. }) => {
+                // Successfully parsed as ForIn
+            }
+            Ok(other) => panic!("Expected ForIn statement, got {:?}", other),
+            Err(e) => panic!("Parse error: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_parse_for_in_vs_regular_for() {
+        // Test that regular for loop still works
+        let input = "for (i < 10) { print(i); };";
+        let statement = parse_statement(input);
+        match statement {
+            Ok(StatementNode::For { condition, .. }) => {
+                // Should be parsed as regular For with condition
+                assert!(matches!(condition, ExpressionNode::Infix { .. }));
+            }
+            Ok(other) => panic!("Expected For statement, got {:?}", other),
+            Err(e) => panic!("Parse error: {}", e),
+        }
+
+        // Test for-in is correctly distinguished
+        let input = "for (i in array) { print(i); };";
+        let statement = parse_statement(input);
+        match statement {
+            Ok(StatementNode::ForIn { .. }) => {
+                // Successfully parsed as ForIn
+            }
+            Ok(other) => panic!("Expected ForIn statement, got {:?}", other),
+            Err(e) => panic!("Parse error: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_range_to_string() {
+        // Test Range expression to_string
+        let input = "0..10";
+        let expression = parse_expression(input);
+        match expression {
+            Ok(value) => {
+                assert_eq!(Node::ExpressionNode(value).to_string(), "0..10");
+            }
+            Err(e) => panic!("Parse error: {}", e),
+        }
+
+        let input = "0..=10";
+        let expression = parse_expression(input);
+        match expression {
+            Ok(value) => {
+                assert_eq!(Node::ExpressionNode(value).to_string(), "0..=10");
+            }
+            Err(e) => panic!("Parse error: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_for_in_to_string() {
+        // Test ForIn statement to_string
+        let input = "for (i in 0..10) { print(i); };";
+        let statement = parse_statement(input);
+        match statement {
+            Ok(value) => {
+                let result = Node::StatementNode(value).to_string();
+                // Check that it contains the key parts
+                assert!(result.contains("for"));
+                assert!(result.contains("in"));
+                assert!(result.contains("0..10"));
+            }
+            Err(e) => panic!("Parse error: {}", e),
         }
     }
 }

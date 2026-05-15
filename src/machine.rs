@@ -351,6 +351,12 @@ impl Machine {
                 }
                 right
             }
+            BINOPS::In => {
+                return Err(format!(
+                    "Runtime error at PC {}: 'in' operator should not be executed directly (ForIn loops are desugared during compilation)",
+                    self.pc
+                ));
+            }
         };
 
         self.os.push(result);
