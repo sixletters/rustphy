@@ -1075,366 +1075,6 @@ print(scanner.scan("123abc"))        # None
 
 **Next:** We'll see the full NFA→DFA conversion algorithm and work through examples!
 
-## 🎯 Quiz Questions
-
-Test your understanding of the concepts covered so far!
-
-### Question 1: Regular Expressions
-
-What does the regex `(a|b)*c` describe?
-
-- A) Any string ending with 'c' that contains only a's and b's before it
-- B) A string that must have at least one 'a' or 'b' before 'c'
-- C) A string with exactly one 'c' at the end
-- D) All strings containing a, b, and c
-
-### Question 2: NFA vs DFA
-
-What's the key difference between an NFA and a DFA?
-
-- A) DFA is faster but NFA is easier to construct
-- B) NFA can be in multiple states simultaneously; DFA is always in exactly one state
-- C) DFA uses more memory than NFA
-- D) NFA cannot recognize all regular languages
-
-### Question 3: ε-transitions
-
-An ε-transition (epsilon transition) allows:
-
-- A) Moving to another state without consuming any input character
-- B) Skipping invalid characters in the input
-- C) Returning to a previous state
-- D) Matching any character
-
-### Question 4: Subset Construction
-
-In the subset construction algorithm, when we have a set S of NFA states:
-
-- A) S becomes a DFA state directly
-- B) S is discarded if it's too large
-- C) We create a DFA state that represents being simultaneously in all NFA states in S
-- D) S must contain only one NFA state to be valid
-
-### Question 5: Real-World Implementation
-
-Modern regex engines like PCRE and JavaScript's regex:
-
-- A) Always use pure DFA for maximum speed
-- B) Always use pure NFA for maximum flexibility
-- C) Use hybrid approaches (DFA-like for simple patterns, backtracking for complex features)
-- D) Convert everything to DFA at compile time
-
-<details markdown="1">
-<summary><strong>Answer Key</strong></summary>
-
-1. **A** ✓ - `(a|b)*c` matches any string ending with 'c' that has zero or more a's and b's before it (the `*` allows zero occurrences)
-
-2. **B** ✓ - The fundamental difference: NFA can be in multiple states simultaneously, DFA is always in exactly one state
-
-3. **A** ✓ - ε-transitions are "free moves" without consuming input characters
-
-4. **C** ✓ - S is a temporary set of NFA states, and we create a DFA state to represent being simultaneously in those states
-
-5. **C** ✓ - Modern regex engines use hybrid approaches because pure DFA can't handle backreferences, lookaheads, and other complex features
-
-</details>
-
----
-
-## 🏋️ Practice Problems
-
-### Problem 1: Drawing an NFA
-
-**Task:** Draw an NFA that recognizes the regex `ab*c` (an 'a', followed by zero or more 'b's, followed by a 'c').
-
-Your NFA should show:
-
-- States (circles)
-- Transitions (arrows with labels)
-- Start state (arrow pointing to it)
-- Accept state(s) (double circle)
-
-<details markdown="1">
-<summary><strong>Solution</strong></summary>
-
-**NFA for `ab*c`:**
-
-```
-         a          b          c
-    ●────────→○────────→○────────→◎
-   Start     State1    State1   Accept
-              │    ↑
-              └────┘
-              self-loop on 'b'
-```
-
-**Explanation:**
-
-- **Start state** → State1 via 'a' (matches the first 'a')
-- **State1** → State1 via 'b' (self-loop for zero or more 'b's from `b*`)
-- **State1** → Accept via 'c' (matches the final 'c')
-
-**Accepted strings:** "ac", "abc", "abbc", "abbbc", ...
-
-**Rejected strings:** "bc" (no 'a'), "ab" (no 'c'), "abca" (extra char after 'c')
-
-</details>
-
----
-
-### Problem 2: NFA Execution
-
-**Task:** Given this NFA for `(a|b)*`:
-
-```
-Start → State0 ─a→ State0
-        State0 ─b→ State0
-        State0 is an accept state
-```
-
-Trace the execution for input string **"aba"**:
-
-- Show which state(s) you're in after each character
-- Does it accept or reject?
-
-<details markdown="1">
-<summary><strong>Solution</strong></summary>
-
-**Execution trace for "aba":**
-
-| Step | Input Position | Current Char | Current State(s) | Action                        |
-| ---- | -------------- | ------------ | ---------------- | ----------------------------- |
-| 0    | -              | -            | State0 (start)   | Initialize                    |
-| 1    | 0              | 'a'          | State0           | Read 'a', self-loop to State0 |
-| 2    | 1              | 'b'          | State0           | Read 'b', self-loop to State0 |
-| 3    | 2              | 'a'          | State0           | Read 'a', self-loop to State0 |
-| 4    | End            | -            | State0 (accept)  | ✅ ACCEPT                     |
-
-**Result:** **ACCEPTED** ✓
-
-State0 is an accept state, and we end in State0, so the string is accepted.
-
-**Other accepted strings:** "a", "b", "aaa", "bbb", "ababab", "" (empty string, already in accept state)
-
-</details>
-
----
-
-### Problem 3: Identify NFA vs DFA
-
-**Task:** For each automaton below, identify if it's an NFA or DFA and explain why:
-
-**Automaton A:**
-
-- State 0 ─a→ State 1
-- State 0 ─b→ State 2
-- State 1 ─a→ State 3
-- State 2 ─b→ State 3
-
-**Automaton B:**
-
-- State 0 ─a→ State 1
-- State 0 ─a→ State 2
-- State 1 ─b→ State 3
-- State 2 ─b→ State 3
-
-<details markdown="1">
-<summary><strong>Solution</strong></summary>
-
-**Automaton A: DFA** ✓
-
-**Reasoning:**
-
-- From State 0: exactly one transition for 'a' (to State 1), exactly one transition for 'b' (to State 2)
-- From State 1: exactly one transition for 'a' (to State 3)
-- From State 2: exactly one transition for 'b' (to State 3)
-- **Every state has at most one transition per symbol** → Deterministic!
-
-**Automaton B: NFA** ✓
-
-**Reasoning:**
-
-- From State 0: **TWO transitions on 'a'** (to both State 1 AND State 2)
-- This violates the DFA rule: "exactly one transition per symbol"
-- When reading 'a' at State 0, the automaton must explore BOTH paths simultaneously
-- **Multiple transitions for the same symbol** → Non-deterministic!
-
-**Key insight:** Even one instance of multiple transitions for the same symbol makes it an NFA.
-
-</details>
-
----
-
-### Problem 4: NFA to DFA Conversion (Subset Construction)
-
-**Task:** Convert this simple NFA to a DFA:
-
-**NFA:**
-
-- Start state: 0
-- State 0 ─a→ {1, 2} (transitions to BOTH states 1 and 2)
-- State 1 ─b→ 3
-- State 2 ─b→ 3
-- Accept state: 3
-
-Show:
-
-1. All DFA states (as sets of NFA states)
-2. All transitions between DFA states
-3. Which DFA state(s) are accept states
-
-<details markdown="1">
-<summary><strong>Solution</strong></summary>
-
-**Step 1: Identify all DFA states**
-
-Each DFA state represents a set of NFA states:
-
-| DFA State | NFA States | Is Accept? |
-| --------- | ---------- | ---------- |
-| **{0}**   | {0}        | No         |
-| **{1,2}** | {1, 2}     | No         |
-| **{3}**   | {3}        | Yes ✓      |
-
-**Step 2: Build transitions**
-
-Starting from DFA state **{0}**:
-
-- On 'a': NFA state 0 goes to {1, 2} → DFA state **{1,2}**
-
-From DFA state **{1,2}**:
-
-- On 'b': NFA state 1 goes to 3, NFA state 2 goes to 3 → both lead to {3} → DFA state **{3}**
-
-From DFA state **{3}**:
-
-- No outgoing transitions in the NFA → No transitions in DFA
-
-**Step 3: Complete DFA**
-
-```
-DFA States: {0}, {1,2}, {3}
-Start state: {0}
-Accept state: {3}
-
-Transitions:
-  {0}   ─a→ {1,2}
-  {1,2} ─b→ {3}
-  {3}   (no transitions)
-```
-
-**Visualization:**
-
-```
-        a          b
-  ●───────→○───────→◎
- {0}      {1,2}    {3}
-Start              Accept
-```
-
-**Testing:**
-
-- Input "ab": {0} ─a→ {1,2} ─b→ {3} ✓ Accept
-- Input "a": {0} ─a→ {1,2} (not accept state) ✗ Reject
-- Input "b": No transition from {0} on 'b' ✗ Reject
-
-</details>
-
----
-
-### Problem 5: Write a Simple Matcher
-
-**Task:** Write pseudocode or Python code for a DFA that matches strings ending with **"ing"** (like "running", "coding", "ing").
-
-Your matcher should:
-
-- Process the input character by character
-- Return `True` if the string ends with "ing"
-- Return `False` otherwise
-
-<details markdown="1">
-<summary><strong>Solution</strong></summary>
-
-**Python Implementation:**
-
-```python
-def matches_ending_ing(input: str):
-    """
-    DFA that matches strings ending with "ing"
-
-    States:
-    - 'start': Initial state
-    - '0': Just saw 'i'
-    - '1': Just saw 'in'
-    - 'accept': Just saw 'ing'
-    """
-    transitions = {
-        'start':  {'i': '0'},
-        '0': {'n': '1', 'i': '0'},      # 'i' restarts pattern
-        '1': {'g': 'accept', 'i': '0'}, # 'i' restarts pattern
-        'accept': {'i': '0'}             # 'i' restarts pattern
-    }
-
-    curr_state = 'start'
-
-    for c in input:
-        trans = transitions[curr_state]
-        if c not in trans:
-            curr_state = 'start'  # Reset on any other character
-        else:
-            curr_state = trans[c]
-
-    return curr_state == 'accept'
-
-
-# Test cases
-print(matches_ending_ing("running"))   # True ✓
-print(matches_ending_ing("coding"))    # True ✓
-print(matches_ending_ing("ing"))       # True ✓
-print(matches_ending_ing("inging"))    # True ✓ (restarts pattern)
-print(matches_ending_ing("ining"))     # True ✓ (restarts pattern)
-print(matches_ending_ing("run"))       # False ✗
-print(matches_ending_ing("in"))        # False ✗
-print(matches_ending_ing("inga"))      # False ✗ (doesn't END with "ing")
-print(matches_ending_ing(""))          # False ✗ (empty string)
-```
-
-**DFA Visualization:**
-
-```
-                i                n                g
-    ●─────────→○─────────→○─────────→◎
-   Start       0          1        Accept
-    ↑          │          │          │
-    │          └──────────┘          │
-    │          i restarts pattern    │
-    │                                │
-    └────────────────────────────────┘
-              i restarts pattern
-```
-
-**Key insights:**
-
-1. **Pattern restart:** When we see 'i' at ANY state, go to state '0' (because 'i' starts a new "ing" pattern)
-2. **Reset on invalid chars:** Any character other than expected → go back to 'start'
-3. **Must end in accept state:** Only return True if we finish in the 'accept' state
-
-**Why the 'i' → '0' transitions matter:**
-
-Without them, "inging" would fail:
-
-- 'i' → '0'
-- 'n' → '1'
-- 'g' → 'accept'
-- 'i' → without the transition, we'd reset to 'start' and LOSE this 'i'!
-- With the transition: 'i' → '0' (restart pattern)
-- 'n' → '1'
-- 'g' → 'accept' ✓
-
-</details>
-
----
-
 ## Limitations of Regular Languages
 
 ### Why Regular Languages Can't Handle Programming Language Syntax
@@ -1926,6 +1566,366 @@ The `else` belongs to the outer `if`
 Expr → Expr AddOp Term   (addition at top level)
 Term → Term MulOp Num    (multiplication binds tighter)
 ```
+
+---
+
+## 🎯 Quiz Questions
+
+Test your understanding of the concepts covered so far!
+
+### Question 1: Regular Expressions
+
+What does the regex `(a|b)*c` describe?
+
+- A) Any string ending with 'c' that contains only a's and b's before it
+- B) A string that must have at least one 'a' or 'b' before 'c'
+- C) A string with exactly one 'c' at the end
+- D) All strings containing a, b, and c
+
+### Question 2: NFA vs DFA
+
+What's the key difference between an NFA and a DFA?
+
+- A) DFA is faster but NFA is easier to construct
+- B) NFA can be in multiple states simultaneously; DFA is always in exactly one state
+- C) DFA uses more memory than NFA
+- D) NFA cannot recognize all regular languages
+
+### Question 3: ε-transitions
+
+An ε-transition (epsilon transition) allows:
+
+- A) Moving to another state without consuming any input character
+- B) Skipping invalid characters in the input
+- C) Returning to a previous state
+- D) Matching any character
+
+### Question 4: Subset Construction
+
+In the subset construction algorithm, when we have a set S of NFA states:
+
+- A) S becomes a DFA state directly
+- B) S is discarded if it's too large
+- C) We create a DFA state that represents being simultaneously in all NFA states in S
+- D) S must contain only one NFA state to be valid
+
+### Question 5: Real-World Implementation
+
+Modern regex engines like PCRE and JavaScript's regex:
+
+- A) Always use pure DFA for maximum speed
+- B) Always use pure NFA for maximum flexibility
+- C) Use hybrid approaches (DFA-like for simple patterns, backtracking for complex features)
+- D) Convert everything to DFA at compile time
+
+<details markdown="1">
+<summary><strong>Answer Key</strong></summary>
+
+1. **A** ✓ - `(a|b)*c` matches any string ending with 'c' that has zero or more a's and b's before it (the `*` allows zero occurrences)
+
+2. **B** ✓ - The fundamental difference: NFA can be in multiple states simultaneously, DFA is always in exactly one state
+
+3. **A** ✓ - ε-transitions are "free moves" without consuming input characters
+
+4. **C** ✓ - S is a temporary set of NFA states, and we create a DFA state to represent being simultaneously in those states
+
+5. **C** ✓ - Modern regex engines use hybrid approaches because pure DFA can't handle backreferences, lookaheads, and other complex features
+
+</details>
+
+---
+
+## 🏋️ Practice Problems
+
+### Problem 1: Drawing an NFA
+
+**Task:** Draw an NFA that recognizes the regex `ab*c` (an 'a', followed by zero or more 'b's, followed by a 'c').
+
+Your NFA should show:
+
+- States (circles)
+- Transitions (arrows with labels)
+- Start state (arrow pointing to it)
+- Accept state(s) (double circle)
+
+<details markdown="1">
+<summary><strong>Solution</strong></summary>
+
+**NFA for `ab*c`:**
+
+```
+         a          b          c
+    ●────────→○────────→○────────→◎
+   Start     State1    State1   Accept
+              │    ↑
+              └────┘
+              self-loop on 'b'
+```
+
+**Explanation:**
+
+- **Start state** → State1 via 'a' (matches the first 'a')
+- **State1** → State1 via 'b' (self-loop for zero or more 'b's from `b*`)
+- **State1** → Accept via 'c' (matches the final 'c')
+
+**Accepted strings:** "ac", "abc", "abbc", "abbbc", ...
+
+**Rejected strings:** "bc" (no 'a'), "ab" (no 'c'), "abca" (extra char after 'c')
+
+</details>
+
+---
+
+### Problem 2: NFA Execution
+
+**Task:** Given this NFA for `(a|b)*`:
+
+```
+Start → State0 ─a→ State0
+        State0 ─b→ State0
+        State0 is an accept state
+```
+
+Trace the execution for input string **"aba"**:
+
+- Show which state(s) you're in after each character
+- Does it accept or reject?
+
+<details markdown="1">
+<summary><strong>Solution</strong></summary>
+
+**Execution trace for "aba":**
+
+| Step | Input Position | Current Char | Current State(s) | Action                        |
+| ---- | -------------- | ------------ | ---------------- | ----------------------------- |
+| 0    | -              | -            | State0 (start)   | Initialize                    |
+| 1    | 0              | 'a'          | State0           | Read 'a', self-loop to State0 |
+| 2    | 1              | 'b'          | State0           | Read 'b', self-loop to State0 |
+| 3    | 2              | 'a'          | State0           | Read 'a', self-loop to State0 |
+| 4    | End            | -            | State0 (accept)  | ✅ ACCEPT                     |
+
+**Result:** **ACCEPTED** ✓
+
+State0 is an accept state, and we end in State0, so the string is accepted.
+
+**Other accepted strings:** "a", "b", "aaa", "bbb", "ababab", "" (empty string, already in accept state)
+
+</details>
+
+---
+
+### Problem 3: Identify NFA vs DFA
+
+**Task:** For each automaton below, identify if it's an NFA or DFA and explain why:
+
+**Automaton A:**
+
+- State 0 ─a→ State 1
+- State 0 ─b→ State 2
+- State 1 ─a→ State 3
+- State 2 ─b→ State 3
+
+**Automaton B:**
+
+- State 0 ─a→ State 1
+- State 0 ─a→ State 2
+- State 1 ─b→ State 3
+- State 2 ─b→ State 3
+
+<details markdown="1">
+<summary><strong>Solution</strong></summary>
+
+**Automaton A: DFA** ✓
+
+**Reasoning:**
+
+- From State 0: exactly one transition for 'a' (to State 1), exactly one transition for 'b' (to State 2)
+- From State 1: exactly one transition for 'a' (to State 3)
+- From State 2: exactly one transition for 'b' (to State 3)
+- **Every state has at most one transition per symbol** → Deterministic!
+
+**Automaton B: NFA** ✓
+
+**Reasoning:**
+
+- From State 0: **TWO transitions on 'a'** (to both State 1 AND State 2)
+- This violates the DFA rule: "exactly one transition per symbol"
+- When reading 'a' at State 0, the automaton must explore BOTH paths simultaneously
+- **Multiple transitions for the same symbol** → Non-deterministic!
+
+**Key insight:** Even one instance of multiple transitions for the same symbol makes it an NFA.
+
+</details>
+
+---
+
+### Problem 4: NFA to DFA Conversion (Subset Construction)
+
+**Task:** Convert this simple NFA to a DFA:
+
+**NFA:**
+
+- Start state: 0
+- State 0 ─a→ {1, 2} (transitions to BOTH states 1 and 2)
+- State 1 ─b→ 3
+- State 2 ─b→ 3
+- Accept state: 3
+
+Show:
+
+1. All DFA states (as sets of NFA states)
+2. All transitions between DFA states
+3. Which DFA state(s) are accept states
+
+<details markdown="1">
+<summary><strong>Solution</strong></summary>
+
+**Step 1: Identify all DFA states**
+
+Each DFA state represents a set of NFA states:
+
+| DFA State | NFA States | Is Accept? |
+| --------- | ---------- | ---------- |
+| **{0}**   | {0}        | No         |
+| **{1,2}** | {1, 2}     | No         |
+| **{3}**   | {3}        | Yes ✓      |
+
+**Step 2: Build transitions**
+
+Starting from DFA state **{0}**:
+
+- On 'a': NFA state 0 goes to {1, 2} → DFA state **{1,2}**
+
+From DFA state **{1,2}**:
+
+- On 'b': NFA state 1 goes to 3, NFA state 2 goes to 3 → both lead to {3} → DFA state **{3}**
+
+From DFA state **{3}**:
+
+- No outgoing transitions in the NFA → No transitions in DFA
+
+**Step 3: Complete DFA**
+
+```
+DFA States: {0}, {1,2}, {3}
+Start state: {0}
+Accept state: {3}
+
+Transitions:
+  {0}   ─a→ {1,2}
+  {1,2} ─b→ {3}
+  {3}   (no transitions)
+```
+
+**Visualization:**
+
+```
+        a          b
+  ●───────→○───────→◎
+ {0}      {1,2}    {3}
+Start              Accept
+```
+
+**Testing:**
+
+- Input "ab": {0} ─a→ {1,2} ─b→ {3} ✓ Accept
+- Input "a": {0} ─a→ {1,2} (not accept state) ✗ Reject
+- Input "b": No transition from {0} on 'b' ✗ Reject
+
+</details>
+
+---
+
+### Problem 5: Write a Simple Matcher
+
+**Task:** Write pseudocode or Python code for a DFA that matches strings ending with **"ing"** (like "running", "coding", "ing").
+
+Your matcher should:
+
+- Process the input character by character
+- Return `True` if the string ends with "ing"
+- Return `False` otherwise
+
+<details markdown="1">
+<summary><strong>Solution</strong></summary>
+
+**Python Implementation:**
+
+```python
+def matches_ending_ing(input: str):
+    """
+    DFA that matches strings ending with "ing"
+
+    States:
+    - 'start': Initial state
+    - '0': Just saw 'i'
+    - '1': Just saw 'in'
+    - 'accept': Just saw 'ing'
+    """
+    transitions = {
+        'start':  {'i': '0'},
+        '0': {'n': '1', 'i': '0'},      # 'i' restarts pattern
+        '1': {'g': 'accept', 'i': '0'}, # 'i' restarts pattern
+        'accept': {'i': '0'}             # 'i' restarts pattern
+    }
+
+    curr_state = 'start'
+
+    for c in input:
+        trans = transitions[curr_state]
+        if c not in trans:
+            curr_state = 'start'  # Reset on any other character
+        else:
+            curr_state = trans[c]
+
+    return curr_state == 'accept'
+
+
+# Test cases
+print(matches_ending_ing("running"))   # True ✓
+print(matches_ending_ing("coding"))    # True ✓
+print(matches_ending_ing("ing"))       # True ✓
+print(matches_ending_ing("inging"))    # True ✓ (restarts pattern)
+print(matches_ending_ing("ining"))     # True ✓ (restarts pattern)
+print(matches_ending_ing("run"))       # False ✗
+print(matches_ending_ing("in"))        # False ✗
+print(matches_ending_ing("inga"))      # False ✗ (doesn't END with "ing")
+print(matches_ending_ing(""))          # False ✗ (empty string)
+```
+
+**DFA Visualization:**
+
+```
+                i                n                g
+    ●─────────→○─────────→○─────────→◎
+   Start       0          1        Accept
+    ↑          │          │          │
+    │          └──────────┘          │
+    │          i restarts pattern    │
+    │                                │
+    └────────────────────────────────┘
+              i restarts pattern
+```
+
+**Key insights:**
+
+1. **Pattern restart:** When we see 'i' at ANY state, go to state '0' (because 'i' starts a new "ing" pattern)
+2. **Reset on invalid chars:** Any character other than expected → go back to 'start'
+3. **Must end in accept state:** Only return True if we finish in the 'accept' state
+
+**Why the 'i' → '0' transitions matter:**
+
+Without them, "inging" would fail:
+
+- 'i' → '0'
+- 'n' → '1'
+- 'g' → 'accept'
+- 'i' → without the transition, we'd reset to 'start' and LOSE this 'i'!
+- With the transition: 'i' → '0' (restart pattern)
+- 'n' → '1'
+- 'g' → 'accept' ✓
+
+</details>
 
 ---
 
