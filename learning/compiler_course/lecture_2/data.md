@@ -1,44 +1,116 @@
----
-layout: lecture
-title: Lecture 2 - Lexical Analysis and Regular Expressions
-lecture_number: 2
+# Lecture 2 - Lexical Analysis and Regular Expressions
+
+**Author: Harris Maung**
+
+_Based on MIT OpenCourseWare 6.035 - Computer Language Engineering_
+
 ---
 
-# Lecture 2 - Lexical Analysis and Regular Expressions
+Hey everyone! Today I'll be talking about lexical analysis and regular expressions. Wow, those are big words! But do we really know what they mean and what problem we're trying to solve?
 
 ## The Language Definition Problem
 
-How do we precisely define a programming language? We break it into three levels:
+How do we define a programming language? What makes a language? Without a proper way to define it, any jibberish could be considered a programming language!
 
-1. **Lexical Structure** - Identifies words in the language (each word is a sequence of characters)
-2. **Syntactic Structure** - Identifies sentences in the language (each sentence is a sequence of words)
-3. **Semantics** - The meaning of a program
+We usually break it into three levels:
 
-### Two Approaches to Specifying Languages
+### 1. Lexical Structure
 
-1. **Generative Approach** - Grammars or regexes that generate all valid strings
-2. **Recognition Approach** - Automata that recognize whether a string is valid
+This identifies **words** in a language (each word is a sequence of characters). Think of this as picking out words in an English sentence. For example, in the sentence "This is a fish," the words "this", "is", "a", and "fish" are the tokens!
+
+**Important:** The lexical structure is NOT the alphabet itself! It's the **rules/patterns** that define what valid words/tokens look like.
+
+Think of it this way:
+
+**The alphabet** = the raw building blocks (individual characters)
+
+- In English: a, b, c, d, ..., z
+- In programming: a-z, 0-9, symbols like `+`, `-`, `*`, `(`, `)`, etc.
+
+**The lexical structure** = the rules for how those characters can be combined into valid words/tokens
+
+- In English: "a word is a sequence of letters separated by spaces or punctuation"
+- In programming:
+  - "An identifier must start with a letter, then can have letters/digits/underscores" → `[a-zA-Z][a-zA-Z0-9_]*`
+  - "A number is one or more digits" → `[0-9]+`
+
+### 2. Syntactic Structure
+
+If the lexical structure defines how words can be formed, the syntactic structure defines how **sentences** can be formed!
+
+For example, in English, you have grammar rules to put words together to make valid sentences:
+
+- ✅ "This is a fish" makes sense
+- ❌ "fish this a is" makes no sense!
+
+Whenever you write programs and see a **"syntax error"**, this is exactly what it means - you've got valid tokens in an invalid order!
+
+### 3. Semantics
+
+This defines whether the sentence actually **makes sense** - does it have valid meaning?
+
+**Syntactically correct but semantically nonsense:**
+
+```
+"Colorless green ideas sleep furiously"
+```
+
+- ✅ Grammar is perfect (adjective + adjective + noun + verb + adverb)
+- ❌ Meaning is nonsense (how can ideas be colorless AND green? How do ideas sleep?)
+
+**Semantics checks things like:**
+
+- Type checking (are you adding int + int, not int + string?)
+- Scope checking (is this variable declared? Is it in scope?)
+- Function signatures (right number/types of arguments?)
+- Return types (does the function return what it promises?)
+- Logical consistency (did you initialize before using?)
+
+**In short:** Semantics validates that the syntactically-correct program actually **means something valid**!
 
 ---
 
-## Regular Expressions
+## Two Approaches to Defining Languages
 
-### Definition
+There are two main ways to define a language:
+
+### 1. Generative Approach
+
+Grammars or regexes that **generate** all valid strings in the language! You define a pattern (like a regex), and from that pattern you can produce/derive any valid string that matches it.
+
+### 2. Recognition Approach
+
+Automata that **recognize** whether a string is valid! You take an input string and the automaton tells you: "Yes, this is valid" or "No, this isn't valid."
+
+**In practice:**
+
+- You **write** the language spec using the **generative approach** (regex/grammar)
+- You **implement** the compiler using the **recognition approach** (automata/parser)
+
+**Think of it like:**
+
+- **Generative** = Recipe that can create all valid dishes
+- **Recognition** = Food inspector that checks if a dish follows the recipe
+
+---
+
+## What Is a Regex?
+
+We've been saying "regex" a lot! So what is it?
 
 A **regular expression (regex)** is a pattern that describes a set of strings. It's a formal way to specify what valid tokens look like in your language.
 
-### Building Blocks
+## Building Blocks
 
-Given an alphabet Σ (set of valid characters), regular expressions are built from:
-
-| Construct        | Notation          | Meaning                                           |
+Given an alphabet (set of valid characters), regular expressions are built from rules:
+| Construct | Notation | Meaning |
 | ---------------- | ----------------- | ------------------------------------------------- |
-| Empty string     | ε (epsilon)       | Matches the empty string                          |
-| Single character | `a` (where a ∈ Σ) | Matches that character                            |
-| Sequence         | `r1r2`            | Regex r1 followed by r2                           |
-| Choice           | `r1 \| r2`        | Either r1 or r2                                   |
-| Kleene star      | `r*`              | Zero or more repetitions: ε \| r \| rr \| rrr ... |
-| Grouping         | `(r)`             | Parentheses for precedence                        |
+| Empty string | ε (epsilon) | Matches the empty string |
+| Single character | `a` (where a ∈ Σ) | Matches that character |
+| Sequence | `r1r2` | Regex r1 followed by r2 |
+| Choice | `r1 \| r2` | Either r1 or r2 |
+| Kleene star | `r*` | Zero or more repetitions: ε \| r \| rr \| rrr ... |
+| Grouping | `(r)` | Parentheses for precedence |
 
 ### Examples
 
@@ -54,9 +126,11 @@ Given an alphabet Σ (set of valid characters), regular expressions are built fr
 
 ## Generating Strings from Regular Expressions
 
-### Derivation Rules
+How do we generate strings from regular expressions?
 
-These are algebraic rules for manipulating regexes to generate concrete strings:
+We follow a set of **derivation rules**! Think of it as a game - the rules show you what steps/moves you can make at each point!
+
+### Derivation Rules
 
 1. **`r1 | r2 → r1`** - Choose the left alternative
 2. **`r1 | r2 → r2`** - Choose the right alternative
@@ -81,35 +155,48 @@ These are algebraic rules for manipulating regexes to generate concrete strings:
 1.0                           (final string!)
 ```
 
-**Key insight:** You're not _reducing_ the pattern - you're **deriving** or **generating** a concrete string from the abstract pattern.
+**Key insights:**
 
-**Note:** Generation is **non-deterministic** - different rule applications in different orders may yield different final strings!
+- You are NOT reducing the pattern! You're **deriving** or **generating** a concrete string from the abstract pattern.
+- Is generation deterministic? **Absolutely not!** If you chose a different move/rule at any point, the resulting string may be completely different. Different rule applications in different orders yield different final strings!
 
 ---
 
 ## Key Terminology
 
-- **Language** - The set of all strings generated by a regular expression
-- **Token** - A single string in the language
-- Languages can be **countably infinite** (unbounded number of strings)
+**Language** - The set of all strings generated by a regular expression.
+
+⚠️ **Important note:** This is NOT the same as a "programming language"! It's simply an overloaded term. At the lexical level, a "language" is just a **set of valid tokens** - nothing more. We'll talk about full programming languages later when we get to syntax and semantics!
+
+**Token** - A single valid string in the language.
+
+Languages can be **countably infinite** (unbounded number of strings).
 
 ---
 
 ## Finite-State Automata (FSA)
 
+Now that you know how to generate all strings using the generative approach, what about the **recognition** approach? What about automata?
+
+Introducing the **Finite-State Automata (FSA)**!
+
 ### Definition
 
 An **FSA** is a mathematical model of computation - a state machine that reads input and decides whether to accept or reject it.
+
+Think of it as a robot that takes in an input string and decides: "Is this acceptable or not?"
 
 ### Components
 
 An FSA consists of:
 
-1. **Alphabet Σ** - Valid input symbols
+1. **Alphabet** - Valid characters/input symbols in a string
 2. **Finite set of states** - Nodes in the state diagram
 3. **Start state** - Where the machine begins
-4. **Accept states** - If the machine ends here, the input is accepted
+4. **Accept state(s)** - If the machine ends here, the input is accepted
 5. **Transitions** - Edges labeled with input symbols
+
+You'll understand this better with an example!
 
 ### Example: FSA for `(0|1)*.(0|1)*`
 
@@ -167,13 +254,13 @@ Result: REJECTED ❌
 
 **Algorithm for running a string through an automaton:**
 
-1. Initialize: current state = start state, current position = first character
-2. Repeat:
+1. **Initialize:** current state = start state, current position = first character
+2. **Repeat:**
    - Match current character against transitions from current state
-   - If transition exists, move to next state and advance to next character
-   - If no transition exists, **reject**
-3. If you reach the end of the string:
-   - If current state is an **accept state** → **ACCEPT**
+   - If transition exists → move to next state and advance to next character
+   - If no transition exists → **REJECT**
+3. **If you reach the end of the string:**
+   - If current state is an accept state → **ACCEPT**
    - Otherwise → **REJECT**
 
 ---
@@ -186,19 +273,27 @@ Result: REJECTED ❌
 | Use case | Language definition                  | Implementation                                    |
 | Form     | Pattern notation                     | State machine                                     |
 
-**Standard approach:** Define language using regex, then automatically translate into automaton for implementation.
+**In practice:** We usually define a language using the **generative approach** (regex) and implement it using the **recognition approach** (automata)!
 
-**Pipeline:**
-
-```
-Regex → NFA → DFA → Optimized DFA → Scanner Code
-```
+Since we define languages using regex but implement them using automata, how do we convert from regex to automata?
 
 ---
 
 ## Converting Regex to Automata
 
 ### Strategy: Structural Induction
+
+We use something called **structural induction**. For those who don't know, induction is a proof technique. There are two types: **mathematical induction** (on numbers) and **structural induction** (on recursive structures). We're only concerned with structural induction here.
+
+**Induction** = reasoning from specific cases to general rules
+
+Think of it as **building up** from small, simple truths to bigger, more complex truths.
+
+**How structural induction works:**
+
+1. **Base cases:** Show how to handle the simplest building blocks (like a single character `a` or empty string `ε`)
+2. **Inductive cases:** Show how to combine smaller pieces (if you can convert `r1` and `r2` to automata, show how to convert `r1|r2`, `r1r2`, and `r*`)
+3. **Conclusion:** You can now convert ANY regex to an automaton!
 
 **Key idea:** Build automata compositionally from regex building blocks.
 
@@ -300,6 +395,160 @@ Automaton:
 
 ---
 
+## Putting It All Together: Thompson's Construction Example
+
+Now let's see how this all works in practice! We'll convert the regex `(a|b)*c` to an NFA step-by-step using Thompson's construction.
+
+**Our regex:** `(a|b)*c`
+
+**The breakdown:**
+
+- Inner: `a|b` (choice between a and b)
+- Middle: `(a|b)*` (Kleene star - zero or more of the choice)
+- Outer: `(a|b)*c` (sequence - the star part followed by c)
+
+### Step 1: Build Base Cases for `a` and `b`
+
+First, we build the simplest automata for single characters:
+
+**Automaton for `a`:**
+
+```
+    a
+  ●────→◎
+  s0    s1
+```
+
+**Automaton for `b`:**
+
+```
+    b
+  ●────→◎
+  s2    s3
+```
+
+Easy! Each is just a start state, a transition on the character, and an accept state.
+
+### Step 2: Combine with Choice - `a|b`
+
+Now we use the **choice construction** to combine these:
+
+1. Create a new start state `s4`
+2. Add ε-transitions from `s4` to both `s0` (start of a) and `s2` (start of b)
+3. Create a new accept state `s5`
+4. Add ε-transitions from `s1` (accept of a) and `s3` (accept of b) to `s5`
+
+**Result:**
+
+```
+           ε    ●─a→◎  ε
+          ┌────→s0──s1───┐
+          │              │
+    ●─────┤              ├────→◎
+   s4     │              │    s5
+  Start   └────→s2──s3───┘  Accept
+           ε    ●─b→◎  ε
+```
+
+**What this does:** From `s4`, we can take either path (via ε-transitions), read either 'a' or 'b', and end up at `s5`. Perfect!
+
+### Step 3: Apply Kleene Star - `(a|b)*`
+
+Now we use the **Kleene star construction** on our `(a|b)` automaton:
+
+1. Create new start state `s6`
+2. ε-transition from `s6` to `s4` (to enter the loop)
+3. ε-transition from `s6` directly to new accept `s7` (for zero repetitions - ε)
+4. ε-transition from `s5` back to `s4` (to repeat the loop)
+5. ε-transition from `s5` to `s7` (to exit the loop)
+
+**Result:**
+
+```
+           ┌────────ε────────┐
+           │                 ↓
+    ●──ε──→●───[a|b automaton]──→◎──ε──→◎
+   s6     s4                    s5       s7
+    │                                    ↑
+    └──────────────ε─────────────────────┘
+```
+
+**What this does:**
+
+- Take the ε-transition from `s6` to `s7` → accept empty string (zero repetitions)
+- OR enter the (a|b) loop, read a's and b's as many times as we want, then exit to `s7`
+
+### Step 4: Build Base Case for `c`
+
+Simple single character again:
+
+```
+    c
+  ●────→◎
+  s8    s9
+```
+
+### Step 5: Sequence - `(a|b)*c`
+
+Finally, we use the **sequence construction** to connect `(a|b)*` with `c`:
+
+1. Merge `s7` (accept state of `(a|b)*`) with `s8` (start state of `c`) using an ε-transition
+2. The new accept state is `s9`
+
+**Final NFA for `(a|b)*c`:**
+
+```
+           ┌────────ε────────┐
+           │                 ↓
+    ●──ε──→●───[a|b automaton]──→◎──ε──→●──c──→◎
+  Start   s4                    s5      s8      Accept
+    │                                            ↑
+    └──────────────ε─────────────────────────────┘
+```
+
+### Testing Our NFA
+
+Let's verify it works:
+
+**Input: "c"**
+
+- Start → ε-transition directly to 'c' part → read 'c' → Accept ✅
+
+**Input: "ac"**
+
+- Start → ε-transition to (a|b) loop → read 'a' → ε-transition to 'c' part → read 'c' → Accept ✅
+
+**Input: "abc"**
+
+- Start → enter loop → read 'a' → loop back → read 'b' → exit loop → read 'c' → Accept ✅
+
+**Input: "ab"** (no 'c' at end)
+
+- Start → enter loop → read 'a', 'b' → end of input, but we're not in an accept state → Reject ❌
+
+**Input: "d"** (wrong character)
+
+- No transition for 'd' from any state → Reject ❌
+
+Perfect! Our NFA correctly recognizes strings matching `(a|b)*c`!
+
+### Key Takeaway
+
+Notice how we **built up** from simple pieces:
+
+1. Base cases: single characters `a`, `b`, `c`
+2. Combined: choice `a|b`
+3. Extended: Kleene star `(a|b)*`
+4. Finalized: sequence `(a|b)*c`
+
+**This is structural induction in action!** We proved we can convert ANY regex to an NFA by showing:
+
+- Base cases work (single characters, ε)
+- Compound operations work (sequence, choice, Kleene star)
+- Therefore, ANY combination works!
+
+---
+
 ## Important Notes
 
 ### Regex vs. Derivation Rules
@@ -321,19 +570,27 @@ The derivation rules help you **understand** what strings the regex accepts, but
 
 ---
 
-## Summary
+## Summary (So Far!)
 
-| Concept                | Purpose                                        |
-| ---------------------- | ---------------------------------------------- |
-| **Regular Expression** | Compact notation for describing token patterns |
-| **Derivation Rules**   | Tools for generating example strings           |
-| **Finite Automaton**   | Executable machine for recognizing tokens      |
-| **Language**           | Set of all valid strings                       |
-| **Token**              | A single valid string in the language          |
-
-**Next:** We'll explore how to convert these NFAs into efficient DFAs and implement them as scanner code!
+| Concept                | Purpose                                         |
+| ---------------------- | ----------------------------------------------- |
+| **Regular Expression** | Compact notation for describing token patterns  |
+| **Derivation Rules**   | Tools for generating example strings            |
+| **Finite Automaton**   | Executable machine for recognizing tokens       |
+| **Language**           | Set of all valid strings (at the lexical level) |
+| **Token**              | A single valid string in the language           |
 
 ---
+
+**To be continued...** Next up: NFAs vs DFAs, subset construction, and how to actually implement this in code!
+
+_Stay tuned for part 2!_ 🚀
+
+---
+
+For FSAs, there are two main types: **DFA** and **NFA**! Are you confused yet? Fret not! DFA stands for **Deterministic Finite Automata** while NFA is **Non-deterministic Finite Automata**!
+
+Here's a technical breakdown of the differences:
 
 ## DFA vs NFA: Key Differences
 
@@ -344,42 +601,17 @@ The derivation rules help you **understand** what strings the regex accepts, but
 | **States during execution** | In exactly ONE state  | In MULTIPLE states simultaneously |
 | **Implementation**          | Simple (table lookup) | Complex (track sets of states)    |
 
-**Why the distinction matters:** Our regex→automata constructions naturally produce NFAs. We convert them to DFAs to make recognition simpler!
+**Note:** ε-transitions (epsilon transitions) are "free transitions"! They allow you to move from one state to another without consuming any input character.
 
----
+But the main idea is that in an NFA you can be in **multiple states at once**, whereas in a DFA, you can only be in **one state at a time**.
 
-## Why Convert NFA to DFA?
-
-**The problem:**
-
-- Regex → Automata conversion produces an **NFA** (with ε-transitions and non-determinism)
-- NFAs are hard to implement (must track multiple states)
-
-**The solution:**
-
-- Convert NFA → DFA using **subset construction**
-- DFAs are easy to implement (simple table lookup)
-
-**The tradeoff:**
-
-- DFA may be **exponentially larger** than NFA (more states)
-- But execution is much faster (deterministic)
-
----
-
-## Understanding "Multiple States Simultaneously"
-
-### The Confusing Part
-
-**What does it mean for an NFA to be "in multiple states at once"?**
-
-This is the hardest concept to grasp! Let's break it down.
-
-### Key Terminology Clarification
+**What does it mean for an NFA to be "in multiple states at once"?** This is the hardest concept to grasp! Let's break it down.
 
 - **NFA/DFA** = The entire state machine (automaton)
 - **State** = A single node/circle in the machine
 - **"Being in multiple states"** = The NFA execution can be at multiple nodes simultaneously
+
+Let's use an example to illustrate this!
 
 ### Example: NFA with ε-transitions
 
@@ -422,7 +654,7 @@ Current states: {0, 2, 3}  ← THREE states at once!
 Remaining input: "a" (haven't consumed anything yet!)
 ```
 
-**Key insight:** We take BOTH ε-transitions simultaneously - no choosing!
+**Key insight:** We take BOTH ε-transitions simultaneously - no choosing! This means that at that point, I am at all three states at once! It also means that any transition out of any of the states in my set becomes available to me!
 
 #### Step 3: Read 'a' from ALL current states
 
@@ -445,7 +677,7 @@ We ended in an accept state → ACCEPTED! ✅
 
 ## Understanding Non-Determinism
 
-### What "Non-Deterministic" Really Means
+Now why is it called "determinism" and "non-determinism," and what does it really mean?
 
 **It does NOT mean:**
 
@@ -455,11 +687,11 @@ We ended in an accept state → ACCEPTED! ✅
 
 **It DOES mean:**
 
-- Exploring ALL possible paths simultaneously
+- Exploring **all paths simultaneously**
 - No choosing - take every path at once
-- Accept if ANY path succeeds
+- Accept if **ANY** path succeeds, regardless of which path it was!
 
-### Mental Models
+Here are some good mental models:
 
 #### Model 1: Parallel Universes (Conceptual)
 
@@ -487,33 +719,7 @@ Both versions exist simultaneously!
 - Version 2 is at state 1
 - Both are real and both continue processing
 
-#### Model 2: Path Exploration (Practical)
-
-```
-         ε
-    ┌─────────→○ (2)
-    │
-    ● (0)
-    │
-    │    ε
-    └─────────→○ (3)
-```
-
-**When at state 0:**
-
-- You DON'T choose between state 2 or state 3
-- You are **simultaneously in both** states 2 AND 3
-- The machine "forks" into parallel executions
-- **All transitions from states 2 AND 3 are applicable**
-
-**Analogy:**
-
-- **Deterministic (DFA):** One person walking one path
-- **Non-deterministic (NFA):** The person clones themselves and walks ALL paths at once
-
-If ANY clone reaches the destination → SUCCESS!
-
-#### Model 3: BFS Graph Search (Computational)
+#### Model 2: BFS Graph Search (Computational)
 
 NFAs work just like **breadth-first search**:
 
@@ -543,15 +749,20 @@ for char in input:
 - Move to ALL reachable nodes/states
 - Continue level by level
 
+Now intuitively, this makes an NFA harder to implement and more complex since at any point you can be in multiple states at once! DFAs are easy to implement since it's just a simple table lookup for the transitions!
+
+**The tradeoff:**
+
+- DFA may be **exponentially larger** than NFA (more states)
+- But execution is much faster (deterministic)
+
 ---
 
 ## NFA to DFA Conversion (Subset Construction)
 
-### The Core Idea
+Now let's run through the algorithm to convert an NFA to a DFA! We create a DFA where **each DFA state represents a set of NFA states**.
 
-Since an NFA can be in **multiple states simultaneously**, we create a DFA where **each DFA state represents a set of NFA states**.
-
-### Example
+Here's an example!
 
 **NFA states:** {0, 1, 2}
 
@@ -564,28 +775,16 @@ Since an NFA can be in **multiple states simultaneously**, we create a DFA where
 
 **Each DFA state is a "snapshot" of which NFA states could be active.**
 
-### Why This Works
+Now if you notice, the same NFA state (like state 1) can appear in multiple DFA states! And that is completely fine - we are simply converting the set of states to a single state!
 
-**NFA problem:**
+**Why does this work?** Instead of tracking multiple states, we track ONE state that represents the set. For example, instead of me being in states {1, 2}, I am in DFA State B (which represents {1, 2})!
 
-```
-"I'm simultaneously in NFA states {1, 2, 3}"
-→ Confusing! Must track multiple states!
-```
-
-**DFA solution:**
-
-```
-"I'm in DFA state {1,2,3}"
-→ Simple! Just one state (that represents the set)!
-```
-
-**The conversion:**
-
-- **NFA execution:** Track a SET of states `{1, 2, 3}`
-- **DFA execution:** Be in a SINGLE state that represents that set
+Now how do we do the conversion? Let's run through Thompson's construction! No, not Klay Thompson! It's called the **McNaughton–Yamada–Thompson algorithm**!
 
 ---
+
+<details markdown="1">
+<summary><strong>📖 Extra Knowledge: Real-World Implementation</strong> (Click to expand)</summary>
 
 ## Real-World Implementation: How Regex Engines Actually Work
 
@@ -862,6 +1061,8 @@ print(scanner.scan("123abc"))        # None
 
 **All the theory we learned (NFA, DFA, ε-transitions, subset construction) is directly implemented in these tools!**
 
+</details>
+
 ---
 
 ## Key Takeaways
@@ -873,8 +1074,6 @@ print(scanner.scan("123abc"))        # None
 5. **Non-deterministic ≠ random** - it means exploring all possibilities simultaneously
 
 **Next:** We'll see the full NFA→DFA conversion algorithm and work through examples!
-
----
 
 ## 🎯 Quiz Questions
 
@@ -1236,49 +1435,125 @@ Without them, "inging" would fail:
 
 ---
 
----
-
 ## Limitations of Regular Languages
 
 ### Why Regular Languages Can't Handle Programming Language Syntax
 
 **The Problem:** Regular languages are **suboptimal** for specifying full programming language syntax.
 
-**Why?** Constructs with **nested syntax**:
+**Why?** Because they cannot handle constructs with **nested syntax**.
 
 **Examples of nesting:**
+
 - Arithmetic: `(a + (b - c)) * (d - (x - (y - z)))`
 - Conditionals: `if (x < y) if (y < z) a = 5 else a = 6 else a = 7`
-- Balanced parentheses: `()`, `(())`, `((()))`, etc.
+- Balanced parentheses: `()`, `(())`, `((()))`
 
 ### The Core Issue: Finite State = Finite Memory
 
-**What regular languages have:**
-- Finite number of states
-- No memory beyond "which state am I in right now"
+The core issue is essentially that **with finite state comes finite memory!** Regular languages have a finite number of states (remember the "F" in FSAs?). They have no memory beyond "which state I am in right now."
 
-**What nesting requires:**
-- **Counting** how deep you are (how many open parentheses)
-- **Remembering** what to match closing parentheses with
-- **Unbounded memory** (nesting can be arbitrarily deep)
+**Now why is nesting an issue for this?**
+
+When nesting, we need to:
+
+- **Count** how deep we are in the nesting
+- **Remember** what to match closing parentheses with
+- Handle **arbitrarily and infinitely deep** structures!
+
+Let me show you an example below!
 
 ### Concrete Example: Balanced Parentheses
 
-**FSA Challenge:** Build an FSA that accepts:
+**FSA Challenge:** Let's build an FSA that accepts:
+
 - `()` ✓
 - `(())` ✓
 - `((()))` ✓
 - `(((())))` ✓
 
 But rejects:
+
 - `(` ✗ (not closed)
 - `())` ✗ (too many closes)
 - `(()` ✗ (not enough closes)
 
 **The Problem:**
+
 - To handle `n` levels of nesting, you need `n+1` states
 - Nesting can be **arbitrarily deep** (no fixed limit)
-- Would need **infinite states** → Not a finite-state automaton!
+- You would need **infinite states** → Not a finite-state automaton!
+
+Let's build an FSA for balanced parentheses and see where it breaks down!
+
+**For 1 level of nesting max:** `()`, `(()` ❌
+
+We need 2 states (1+1):
+
+```
+State 0: "I've seen 0 open parens" (start/accept)
+State 1: "I've seen 1 open paren"
+```
+
+Transitions:
+
+- State 0 --'('--> State 1 (opened one paren)
+- State 1 --')'--> State 0 (closed it, back to balanced)
+
+This accepts: `()` ✓
+But breaks on: `(())` ❌ (we're in State 1 after the first `(`, read another `(`, but we have no State 2!)
+
+**For 2 levels of nesting max:** `(())`, `((())` ❌
+
+We need 3 states (2+1):
+
+```
+State 0: "0 open parens" (start/accept)
+State 1: "1 open paren"
+State 2: "2 open parens"
+```
+
+Transitions:
+
+- State 0 --'('--> State 1
+- State 1 --'('--> State 2
+- State 2 --')'--> State 1
+- State 1 --')'--> State 0
+
+This accepts: `()`, `(())` ✓
+But breaks on: `((()))` ❌ (no State 3!)
+
+**For 3 levels:** Need 4 states (3+1)
+**For N levels:** Need N+1 states
+
+**The states represent "depth counters":**
+
+- State 0 = depth 0 (balanced)
+- State 1 = depth 1 (one unclosed paren)
+- State 2 = depth 2 (two unclosed parens)
+- ...
+- State N = depth N
+
+**The fatal flaw:** In real programs, nesting can be **unbounded**:
+
+```javascript
+// Someone could write arbitrarily deep nesting:
+if (x) {
+  if (y) {
+    if (z) {
+      if (a) {
+        if (b) {
+          // ... as deep as they want!
+        }
+      }
+    }
+  }
+}
+```
+
+There's no fixed maximum N! So we'd need **infinite states** - which violates the "finite" in "Finite-State Automaton"!
+
+**This is why we need CFGs:** They have a **stack** (unbounded memory) to track nesting depth, not just a fixed number of states.
 
 **Key Insight:** Finite-state machines **cannot handle infinitely deep nested recursive structures!**
 
@@ -1291,31 +1566,42 @@ But rejects:
 A CFG consists of **four components:**
 
 1. **Set of Terminals** - Actual tokens (each defined by a regular expression)
+
    ```
    { Op, Int, Open, Close, IfKeyword, WhileKeyword }
    ```
 
 2. **Set of Nonterminals** - Placeholder symbols (variables to be expanded)
+
    ```
    { Start, Expr, Stat }
    ```
-   
+
    **What's a nonterminal?** Just a symbol (letter or word) representing "something to be expanded"
 
 3. **Set of Productions** - Replacement rules
+
    ```
    Start → Stat
    Expr → Expr Op Int
    Stat → if Expr then Stat else Stat
    ```
-   
+
    **What's a production?** A rule you can apply to transform nonterminals
 
 4. **Start Symbol** - The nonterminal where generation begins (usually `Start` or `S`)
 
 ### Example Grammar for Arithmetic
 
-**Terminals (defined by regex):**
+The example below shows the grammar for arithmetic!
+
+**Terminals** (defined by regex):
+
+- **Op** = operations (`+`, `-`, `*`, `/`)
+- **Int** = integers (one or more digits)
+- **Open** = opening parenthesis `(`
+- **Close** = closing parenthesis `)`
+
 ```
 Op = + | - | * | /
 Int = [0-9][0-9]*
@@ -1323,12 +1609,16 @@ Open = (
 Close = )
 ```
 
+**Nonterminals** are expressions that can be further expanded:
+
 **Nonterminals:**
+
 ```
 { Start, Expr }
 ```
 
 **Productions:**
+
 ```
 Start → Expr
 Expr  → Expr Op Int
@@ -1337,6 +1627,14 @@ Expr  → Open Expr Close
 ```
 
 ---
+
+## CFG: Generation or Validation?
+
+Now you might be wondering: **Is CFG for validation or for generation?**
+
+**Answer: Both!** Production rules work in **both directions** depending on what you're doing.
+
+For example, the rule `Expr → Expr Op Int` can be read in two ways:
 
 ## The Production Game: Generating Strings
 
@@ -1355,6 +1653,7 @@ Expr  → Open Expr Close
 ### Example Generation
 
 **Grammar:**
+
 ```
 Start → Expr
 Expr  → Expr + Int
@@ -1375,6 +1674,38 @@ Step 6: Int → 2               =  1 + 2
 Final: "1 + 2"
 ```
 
+## Understanding Grammars: Generative vs Recognitive
+
+### The Dual Nature
+
+A production like `Stat → if Expr then Stat else Stat` can be understood **two ways:**
+
+#### Generative (Top-Down)
+
+**Read as:** "A `Stat` can **become** `if Expr then Stat else Stat`"
+
+**Use when:**
+
+- Learning what strings are valid
+- Generating test cases
+- Understanding "what can I write?"
+
+**Think:** "I start with placeholders and **create** valid strings"
+
+#### Recognitive (Bottom-Up)
+
+**Read as:** "If you see `if Expr then Stat else Stat`, it **is** a valid `Stat`"
+
+**Use when:**
+
+- Parsing code
+- Checking if code is syntactically valid
+- Building a parser/compiler
+
+**Think:** "I look at code and **verify** it matches the rules"
+
+**Key Point:** Grammars work **both ways!** The arrow `→` can be read as replacement (generative) or recognition (recognitive).
+
 ---
 
 ## Parse Trees
@@ -1384,6 +1715,7 @@ Final: "1 + 2"
 A **parse tree** visualizes the derivation of a string from a grammar.
 
 **Structure:**
+
 - **Internal nodes:** Nonterminals
 - **Leaves:** Terminals
 - **Edges:** From nonterminal on LHS of production to symbols on RHS
@@ -1391,6 +1723,7 @@ A **parse tree** visualizes the derivation of a string from a grammar.
 ### Example Parse Tree
 
 **Grammar:**
+
 ```
 Expr → Expr + Int
 Expr → Int
@@ -1399,6 +1732,7 @@ Expr → Int
 **String:** `1 + 2`
 
 **Parse Tree:**
+
 ```
       Expr
      / | \
@@ -1411,36 +1745,6 @@ Expr → Int
 
 ---
 
-## Understanding Grammars: Generative vs Recognitive
-
-### The Dual Nature
-
-A production like `Stat → if Expr then Stat else Stat` can be understood **two ways:**
-
-#### Generative (Top-Down)
-**Read as:** "A `Stat` can **become** `if Expr then Stat else Stat`"
-
-**Use when:**
-- Learning what strings are valid
-- Generating test cases
-- Understanding "what can I write?"
-
-**Think:** "I start with placeholders and **create** valid strings"
-
-#### Recognitive (Bottom-Up)
-**Read as:** "If you see `if Expr then Stat else Stat`, it **is** a valid `Stat`"
-
-**Use when:**
-- Parsing code
-- Checking if code is syntactically valid
-- Building a parser/compiler
-
-**Think:** "I look at code and **verify** it matches the rules"
-
-**Key Point:** Grammars work **both ways!** The arrow `→` can be read as replacement (generative) or recognition (recognitive).
-
----
-
 ## Concrete vs Abstract Syntax
 
 ### Concrete Syntax
@@ -1448,15 +1752,17 @@ A production like `Stat → if Expr then Stat else Stat` can be understood **two
 **Definition:** The actual text you write, including all punctuation, keywords, and formatting to make it unambiguous.
 
 **Example:**
+
 ```javascript
 if (x < 5) {
-    y = 10;
+  y = 10;
 } else {
-    y = 20;
+  y = 20;
 }
 ```
 
 **Contains:**
+
 - Keywords: `if`, `else`
 - Punctuation: `(`, `)`, `{`, `}`, `;`
 - All the "noise" needed for parsing
@@ -1466,6 +1772,7 @@ if (x < 5) {
 **Definition:** The essential structure of the program - just the meaningful parts, without the "noise."
 
 **Same example, abstract view:**
+
 ```
 IfStatement
 ├── Condition: (x < 5)
@@ -1474,20 +1781,22 @@ IfStatement
 ```
 
 **What's removed:**
+
 - Keywords (`if`, `else`)
 - Punctuation (`()`, `{}`, `;`)
 - Anything that doesn't affect meaning
 
 ### Concrete Parse Tree vs AST
 
-| Type | What It Contains |
-|------|------------------|
-| **Concrete Parse Tree** | Every element from the grammar (all keywords, punctuation) |
+| Type                           | What It Contains                                           |
+| ------------------------------ | ---------------------------------------------------------- |
+| **Concrete Parse Tree**        | Every element from the grammar (all keywords, punctuation) |
 | **Abstract Syntax Tree (AST)** | Just the meaningful parts (operators, operands, structure) |
 
 ### Why Concrete Syntax Needs "Noise"
 
 **Parentheses prevent ambiguity:**
+
 ```c
 // With parens - clear!
 if (x > 0) { print(x); }
@@ -1497,6 +1806,7 @@ if x > 0 print(x);  // Is this "if (x > 0)" or "if (x > 0 print)"?
 ```
 
 **Braces show scope:**
+
 ```c
 // Without braces - ambiguous!
 if (x > 0)
@@ -1513,6 +1823,7 @@ if (x > 0)
 **Two valid abstract syntax trees:**
 
 **Option 1:** `(2 + 3) * 4`
+
 ```
 Multiply
 ├── Add
@@ -1522,6 +1833,7 @@ Multiply
 ```
 
 **Option 2:** `2 + (3 * 4)`
+
 ```
 Add
 ├── 2
@@ -1533,6 +1845,7 @@ Add
 Both are valid ASTs! The abstract syntax doesn't specify precedence.
 
 **Concrete syntax resolves this:**
+
 - Precedence rules (`*` before `+`)
 - Explicit parentheses: `2 + (3 * 4)`
 
@@ -1568,6 +1881,7 @@ Both are valid ASTs! The abstract syntax doesn't specify precedence.
 ### The Dangling Else Problem
 
 **Consider the statement:**
+
 ```
 if e1 then if e2 then s1 else s2
 ```
@@ -1575,18 +1889,22 @@ if e1 then if e2 then s1 else s2
 **Question:** Which `if` does the `else` belong to?
 
 **Parse Tree #1:**
+
 ```
 if e1 then
     (if e2 then s1 else s2)
 ```
+
 The `else` belongs to the inner `if`
 
 **Parse Tree #2:**
+
 ```
 (if e1 then
     if e2 then s1)
 else s2
 ```
+
 The `else` belongs to the outer `if`
 
 **Problem:** The grammar is **ambiguous** - one string has multiple valid parse trees!
@@ -1596,12 +1914,14 @@ The `else` belongs to the outer `if`
 **Example:** `2 - 3 * 4`
 
 **Problem with pure left associativity:**
+
 - Parsing left-to-right gives: `(2 - 3) * 4` = `-4`
 - But we want: `2 - (3 * 4)` = `-10`
 
 **Precedence violation:** Multiplication should bind tighter than subtraction!
 
 **Solution:** Structure the grammar to enforce precedence:
+
 ```
 Expr → Expr AddOp Term   (addition at top level)
 Term → Term MulOp Num    (multiplication binds tighter)
@@ -1620,6 +1940,7 @@ Put your knowledge into practice with these hands-on coding problems!
 **Task:** Implement a general NFA simulator that can execute any NFA.
 
 **Requirements:**
+
 ```python
 class NFA:
     def __init__(self, states, alphabet, transitions, start_state, accept_states):
@@ -1632,7 +1953,7 @@ class NFA:
         accept_states: set of accepting states
         """
         pass
-    
+
     def accepts(self, input_string):
         """
         Return True if the NFA accepts the input string, False otherwise.
@@ -1642,6 +1963,7 @@ class NFA:
 ```
 
 **Test cases:**
+
 ```python
 # NFA for (a|b)*c
 nfa = NFA(
@@ -1673,11 +1995,12 @@ assert nfa.accepts("abcd") == False
 **Task:** Implement the subset construction algorithm to convert an NFA to a DFA.
 
 **Requirements:**
+
 ```python
 def nfa_to_dfa(nfa):
     """
     Convert an NFA to an equivalent DFA using subset construction.
-    
+
     Input: NFA object (from Challenge 1)
     Output: DFA object with:
         - states: set of DFA states (each state is a frozenset of NFA states)
@@ -1685,13 +2008,14 @@ def nfa_to_dfa(nfa):
         - transitions: dict mapping (state, symbol) -> next_state
         - start_state: DFA start state
         - accept_states: set of DFA accept states
-    
+
     Must handle ε-transitions correctly by computing ε-closure!
     """
     pass
 ```
 
 **Algorithm steps:**
+
 1. Compute ε-closure for each NFA state
 2. Start with ε-closure of NFA start state as DFA start state
 3. For each DFA state and each symbol:
@@ -1701,6 +2025,7 @@ def nfa_to_dfa(nfa):
 4. Mark DFA states as accepting if they contain any NFA accept state
 
 **Test:**
+
 ```python
 # Convert the (a|b)*c NFA to DFA
 dfa = nfa_to_dfa(nfa)
@@ -1720,26 +2045,28 @@ assert dfa.accepts("ab") == False
 **Task:** Implement Thompson's construction to convert a simple regex to an NFA.
 
 **Requirements:**
+
 ```python
 def regex_to_nfa(regex):
     """
     Convert a regex to an NFA using Thompson's construction.
-    
+
     Supported operators:
     - Character literals: 'a', 'b', etc.
     - Concatenation: 'ab' means 'a' followed by 'b'
     - Choice: 'a|b' means 'a' or 'b'
     - Kleene star: 'a*' means zero or more 'a's
     - Parentheses: '(ab)*'
-    
+
     Example: "a(b|c)*d" -> NFA
-    
+
     Return: NFA object
     """
     pass
 ```
 
 **Implementation hints:**
+
 1. Parse the regex into an AST (expression tree)
 2. Recursively build NFAs for each operator:
    - Base case: single character → simple 2-state NFA
@@ -1748,6 +2075,7 @@ def regex_to_nfa(regex):
    - Kleene star: add loop-back and bypass ε-transitions
 
 **Test:**
+
 ```python
 nfa = regex_to_nfa("(a|b)*c")
 assert nfa.accepts("aabbc") == True
@@ -1770,6 +2098,7 @@ assert nfa2.accepts("ab") == False
 **Task:** Write a parser for balanced parentheses using a context-free grammar.
 
 **Grammar:**
+
 ```
 S → ε
 S → ( S )
@@ -1777,13 +2106,14 @@ S → S S
 ```
 
 **Requirements:**
+
 ```python
 def parse_balanced_parens(input_string):
     """
     Parse a string of parentheses and return a parse tree.
-    
+
     Return None if the string is not balanced.
-    
+
     Parse tree representation:
     - Empty: None
     - (S): ('paren', subtree)
@@ -1799,6 +2129,7 @@ def is_balanced(input_string):
 ```
 
 **Test:**
+
 ```python
 assert is_balanced("") == True
 assert is_balanced("()") == True
@@ -1826,6 +2157,7 @@ assert tree == ('paren', ('paren', None))
 **Task:** Build a recursive descent parser for arithmetic expressions with correct operator precedence.
 
 **Grammar:**
+
 ```
 Expr → Term (('+' | '-') Term)*
 Term → Factor (('*' | '/') Factor)*
@@ -1833,6 +2165,7 @@ Factor → NUMBER | '(' Expr ')'
 ```
 
 **Requirements:**
+
 ```python
 class ASTNode:
     pass
@@ -1842,7 +2175,7 @@ class BinOp(ASTNode):
         self.op = op
         self.left = left
         self.right = right
-    
+
     def eval(self):
         """Evaluate the expression"""
         pass
@@ -1850,22 +2183,23 @@ class BinOp(ASTNode):
 class Number(ASTNode):
     def __init__(self, value):
         self.value = value
-    
+
     def eval(self):
         return self.value
 
 def parse_expression(tokens):
     """
     Parse a list of tokens into an AST.
-    
+
     tokens: list of strings like ['2', '+', '3', '*', '4']
-    
+
     Return: ASTNode (root of AST)
     """
     pass
 ```
 
 **Test:**
+
 ```python
 # Test precedence: 2 + 3 * 4 = 14 (not 20)
 tokens = ['2', '+', '3', '*', '4']
@@ -1899,6 +2233,7 @@ assert ast.eval() == 26
 **Task:** Build a lexer that tokenizes source code based on regex patterns.
 
 **Requirements:**
+
 ```python
 class Token:
     def __init__(self, type, value, position):
@@ -1922,19 +2257,20 @@ class Lexer:
             ('SEMICOLON',  r';'),
             ('WHITESPACE', r'\s+'),  # Skip whitespace
         ]
-    
+
     def tokenize(self, source_code):
         """
         Tokenize source code.
-        
+
         Return: list of Token objects (skip WHITESPACE tokens)
-        
+
         Raise exception if invalid character found.
         """
         pass
 ```
 
 **Test:**
+
 ```python
 lexer = Lexer()
 tokens = lexer.tokenize("x = 42 + y * 3;")
@@ -1967,6 +2303,7 @@ for actual, exp in zip(tokens, expected):
 **Task:** Given an ambiguous grammar, fix it to remove ambiguity.
 
 **Ambiguous Grammar (dangling else):**
+
 ```
 Stat → if Expr then Stat
 Stat → if Expr then Stat else Stat
@@ -1976,6 +2313,7 @@ Stat → other
 **Problem:** `if e1 then if e2 then s1 else s2` has two parse trees!
 
 **Your task:**
+
 1. Show both parse trees for the problematic input
 2. Rewrite the grammar to be unambiguous (most languages match `else` to nearest `if`)
 3. Implement a parser for your unambiguous grammar
@@ -1984,15 +2322,16 @@ Stat → other
 def parse_statement(tokens):
     """
     Parse a statement according to your unambiguous grammar.
-    
+
     tokens: list like ['if', 'e1', 'then', 'if', 'e2', 'then', 's1', 'else', 's2']
-    
+
     Return: parse tree showing which 'if' the 'else' belongs to
     """
     pass
 ```
 
 **Test:**
+
 ```python
 # "if e1 then if e2 then s1 else s2"
 # Should parse as: if e1 then (if e2 then s1 else s2)
@@ -2012,6 +2351,7 @@ assert is_else_matched_to_inner_if(tree) == True
 **Task:** Combine everything to build a tiny compiler for a simple language!
 
 **Language specification:**
+
 ```
 program:
   x = 5;
@@ -2022,17 +2362,19 @@ program:
 ```
 
 **Your compiler should:**
+
 1. **Lexer:** Tokenize the source code
 2. **Parser:** Build an AST from tokens
 3. **Semantic analysis:** Type checking, variable tracking
 4. **Code generation:** Generate bytecode or target language (Python/JavaScript)
 
 **Requirements:**
+
 ```python
 def compile_and_run(source_code):
     """
     Compile and execute the mini language.
-    
+
     Return: dictionary of final variable values
     """
     tokens = lexer.tokenize(source_code)
@@ -2095,7 +2437,7 @@ class StarNode(RegexNode):
 class RegexParser:
     """
     Recursive descent parser for regex.
-    
+
     Operator precedence (highest to lowest):
     1. Parentheses ()
     2. Kleene star *

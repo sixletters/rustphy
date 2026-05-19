@@ -7,7 +7,7 @@ title: MIT OpenCourseWare - Compiler Engineering Series
 
 **By Harris Maung**
 
-*Based on MIT 6.035 - Computer Language Engineering*
+_Based on MIT 6.035 - Computer Language Engineering_
 
 ---
 
@@ -28,6 +28,7 @@ I'm working through MIT's Computer Language Engineering course and documenting e
 ### [Lecture 1: Introduction to Compilers](lecture_1_intro/data.md)
 
 **Topics covered:**
+
 - Why study compilers?
 - Programming language requirements (precision, expressiveness, abstraction)
 - Anatomy of a compiler pipeline (Lexer → Parser → AST → IR → Optimizer → Code Gen)
@@ -49,6 +50,7 @@ I'm working through MIT's Computer Language Engineering course and documenting e
 ### [Lecture 2: Lexical Analysis and Regular Expressions](lecture_2/data.md)
 
 **Topics covered:**
+
 - Regular expressions and their building blocks
 - Finite-state automata (FSA) - NFAs vs DFAs
 - Converting regex to NFA (Thompson's construction)
@@ -64,19 +66,19 @@ I'm working through MIT's Computer Language Engineering course and documenting e
 
 ---
 
-### Lecture 3: Parsing *(Coming soon...)*
+### Lecture 3: Parsing _(Coming soon...)_
 
 **Topics:** Context-free grammars, top-down vs bottom-up parsing, AST construction
 
 ---
 
-### Lecture 4: Semantic Analysis *(Coming soon...)*
+### Lecture 4: Semantic Analysis _(Coming soon...)_
 
 **Topics:** Type checking, symbol tables, scope resolution
 
 ---
 
-### Lecture 5: Code Generation *(Coming soon...)*
+### Lecture 5: Code Generation _(Coming soon...)_
 
 **Topics:** Instruction selection, register allocation, code emission
 
