@@ -1,14 +1,8 @@
-# HashMap Learning Guide
+# Deep Dive into HashMaps
 
-Today, we're diving deep into **hashmaps**! In this guide, we'll:
+**Understanding the data structure that powers dictionaries, maps, and associative arrays**
 
-1. ✅ Understand what a HashMap is
-2. ✅ Explore different implementation strategies
-3. ✅ Analyze time/space complexity
-4. ✅ Learn how hashmaps work in modern languages (Python, Rust, Kotlin)
-5. ✅ Implement it in our Rust compiler!
-
-Let's get started! 🚀
+HashMaps are one of the most fundamental and powerful data structures in computer science. In this deep dive, we'll explore how they work, why they're so fast, and how to implement them from scratch.
 
 ---
 
