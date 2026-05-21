@@ -438,7 +438,7 @@ impl<'a> Compiler<'a> {
                     _ => {
                         return Err(WasmCompileError::Other(
                             "ForIn variable must be an identifier".to_string(),
-                        ))
+                        ));
                     }
                 };
 
@@ -453,7 +453,7 @@ impl<'a> Compiler<'a> {
                     _ => {
                         return Err(WasmCompileError::Other(
                             "ForIn iterable must be a Range expression".to_string(),
-                        ))
+                        ));
                     }
                 };
 

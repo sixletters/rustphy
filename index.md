@@ -54,6 +54,26 @@ I'm working through MIT's 6.035 Computer Language Engineering course and documen
 
 [**View all lectures →**](learning/compiler_course/)
 
+### [HashMap Implementation Deep Dive](learning/hashmaps/)
+
+A comprehensive guide to understanding and implementing hash tables - from theory to practice!
+
+#### What You'll Learn
+
+**[Complete HashMap Guide](learning/hashmaps/index.md)**
+- What hashmaps are and why they're O(1) on average
+- Three fundamental implementation strategies:
+  - Linear Search (simple, cache-friendly)
+  - Separate Chaining (general-purpose)
+  - Open Addressing (memory-efficient)
+- Hash functions and collision resolution
+- Load factor analysis and performance tradeoffs
+- Advanced topic: Clustering and its mathematical impact
+- Interactive quizzes to test your understanding
+- Implementation challenges with full solutions
+
+Perfect for understanding the data structures that power dictionaries in Python, HashMap in Java/Rust, and unordered_map in C++!
+
 ---
 
 ## 🛠️ Project Resources
