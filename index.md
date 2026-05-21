@@ -48,7 +48,12 @@ I'm working through MIT's 6.035 Computer Language Engineering course and documen
 - Assembly code comparison showing 4x performance improvement
 - Interactive quizzes and practice problems
 
-**Lecture 2: Lexical Analysis** *(Coming soon...)*
+**[Lecture 2: Lexical Analysis and Regular Expressions](learning/compiler_course/lecture_2/data.md)**
+- Language definition: lexical structure, syntactic structure, and semantics
+- Generative vs recognition approaches to defining languages
+- Regular expressions and their properties
+- Finite automata (DFA and NFA) theory and implementation
+- Converting between regex, NFA, and DFA
 
 **Lecture 3: Parsing** *(Coming soon...)*
 
