@@ -61,7 +61,7 @@ I'm working through MIT's 6.035 Computer Language Engineering course and documen
 
 ### [HashMap Implementation Deep Dive](learning/hashmaps/)
 
-A comprehensive guide to understanding and implementing hash tables - from theory to practice!
+A comprehensive guide to understanding and implementing hash tables - from theory to practice.
 
 #### What You'll Learn
 
@@ -77,7 +77,7 @@ A comprehensive guide to understanding and implementing hash tables - from theor
 - Interactive quizzes to test your understanding
 - Implementation challenges with full solutions
 
-Perfect for understanding the data structures that power dictionaries in Python, HashMap in Java/Rust, and unordered_map in C++!
+Perfect for understanding the data structures that power dictionaries in Python, HashMap in Java/Rust, and unordered_map in C++.
 
 ---
 
@@ -102,7 +102,7 @@ I'm actively working on:
 
 ## 🤝 Get Involved
 
-This is a learning-in-public project! Feel free to:
+This is a learning-in-public project. Feel free to:
 - ⭐ Star the [repo](https://github.com/sixletters/rustphy)
 - 💬 Open issues with questions or suggestions
 - 🐛 Submit PRs if you spot mistakes

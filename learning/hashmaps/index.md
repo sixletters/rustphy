@@ -78,6 +78,153 @@ hash("city") → 2
 
 ---
 
+## Understanding Hash Functions
+
+We talk a lot about hashmaps but never the "hash" part — and it's even in the name. A hash function takes arbitrary data (a string, an integer, anything) and maps it to a fixed-size number. That number becomes your array index.
+
+### The Naive Approach
+
+Say you have the key `"cat"` and an array of size 8. The simplest thing: sum the ASCII values and mod by the array size.
+
+```
+'c' = 99
+'a' = 97
+'t' = 116
+sum = 312
+312 % 8 = 0  →  index 0
+```
+
+This works, but it's terrible. `"cat"`, `"act"`, and `"tac"` all hash to the same bucket because addition is commutative. You get collisions constantly, and your O(1) lookup degrades toward O(n).
+
+### Polynomial Rolling Hash
+
+The fix is to make position matter. Instead of summing, treat the string like a polynomial:
+
+```
+hash = c[0]*p^(n-1) + c[1]*p^(n-2) + ... + c[n-1]*p^0
+```
+
+Where `c[i]` is the ASCII value of the character at position `i`, and `p` is some prime (commonly 31 or 37). In practice you compute it iteratively using **Horner's method** — a trick that avoids computing exponents explicitly:
+
+```
+hash = 0
+for each character c:
+    hash = hash * 31 + ascii(c)
+
+index = hash % table_size
+```
+
+For `"cat"`:
+
+```
+step 1:  hash = 0*31 + 99  = 99        ('c')
+step 2:  hash = 99*31 + 97 = 3166      ('a')
+step 3:  hash = 3166*31 + 116 = 98262  ('t')
+98262 % 8 = 6  →  index 6
+```
+
+This looks different from the polynomial formula, but they're identical. Starting from the direct formula:
+
+```
+hash = 99*31² + 97*31 + 116
+     = (99*31 + 97)*31 + 116    ← factor out 31
+     = 98262
+```
+
+You're building up the same value step by step — one multiply and one add per character, without ever computing `31²` explicitly.
+
+### What Makes a Good Hash Function
+
+**Uniform distribution** — keys should spread evenly across buckets. If everything clusters in a few slots, you lose the O(1) guarantee.
+
+**Avalanche effect** — a small change in input should produce a wildly different output. Changing `"cat"` to `"bat"` should not produce a nearby index. This prevents accidental clustering from similar keys.
+
+**Speed** — you're calling this on every lookup. A slow hash defeats the point of the data structure.
+
+There's a fourth property that only matters for networked services: **unpredictability** — more on that below.
+
+### What's Used in Practice
+
+**FNV-1a** (Fowler–Noll–Vo) — extremely simple and fast:
+
+```
+hash = offset_basis  (a large prime constant)
+for each byte b:
+    hash = hash XOR b
+    hash = hash * FNV_prime
+```
+
+The XOR-then-multiply pattern is cheap and spreads bits well. Common in embedded systems and anywhere simplicity matters.
+
+**MurmurHash** — designed for general hashtable use. Mixes bits more aggressively using multiply + rotate + XOR sequences. Very fast on modern hardware, excellent distribution. Not cryptographic, but great for in-process hashmaps where you control the input.
+
+**SipHash** — in 2011, researchers showed that if an attacker can send arbitrary keys to your hashmap (e.g., HTTP request parameters), they can craft keys that all collide into the same bucket. Your O(1) hashmap becomes O(n), and a handful of requests can bring down a server. This is called a **HashDoS attack**.
+
+SipHash is the solution. It takes a secret random seed generated at process startup. Without knowing the seed, an attacker can't predict which keys will collide. Python switched to it in 3.4. Rust uses it as the default in `std::HashMap`.
+
+The tradeoff: SipHash is slower than MurmurHash. For trusted inputs (internal tooling, offline data), MurmurHash or FNV is fine. If anything from the outside world touches your keys, you want SipHash or equivalent.
+
+**xxHash / AHash** — newer algorithms aiming to match SipHash's safety with performance closer to MurmurHash, often using SIMD instructions. Rust's `hashbrown` (which backs `std::HashMap`) defaults to AHash.
+
+### The One Thing to Remember
+
+> A hash function doesn't eliminate collisions — it minimizes and distributes them. The table still needs a collision resolution strategy. The hash function just determines how evenly you enter the problem.
+
+### Quiz: Hash Functions
+
+**Question 1:** Why does summing ASCII values make a poor hash function?
+
+<details markdown="1">
+<summary>Answer</summary>
+
+Because addition is commutative — `"cat"`, `"act"`, and `"tac"` all produce the same sum. A good hash function must be sensitive to the **order** of characters, not just which characters appear.
+
+</details>
+
+---
+
+**Question 2:** What does the avalanche effect mean, and why does it matter?
+
+<details markdown="1">
+<summary>Answer</summary>
+
+The avalanche effect means a small change in the input (e.g., one character) should produce a completely different hash output. Without it, similar keys (like `"user1"` and `"user2"`) would hash to nearby buckets, causing clustering and degrading performance.
+
+</details>
+
+---
+
+**Question 3:** Why did Python and Rust both switch to SipHash as their default? What was the threat?
+
+<details markdown="1">
+<summary>Answer</summary>
+
+**HashDoS attacks.** If an attacker can control the keys inserted into a hashmap (e.g., HTTP request parameters), they can craft keys that all collide into the same bucket — turning your O(1) hashmap into O(n) and bringing down a server with minimal traffic.
+
+SipHash uses a secret random seed generated at startup. Without the seed, an attacker can't predict collisions. Both Python (3.4) and Rust switched to it for this reason.
+
+</details>
+
+---
+
+**Question 4:** For `"dog"` using the polynomial rolling hash with `p = 31` and table size 8, what index does it produce?
+
+(`'d'` = 100, `'o'` = 111, `'g'` = 103)
+
+<details markdown="1">
+<summary>Answer</summary>
+
+```
+step 1:  hash = 0*31 + 100  = 100
+step 2:  hash = 100*31 + 111 = 3211
+step 3:  hash = 3211*31 + 103 = 99644
+99644 % 8 = 4  →  index 4
+```
+
+</details>
+
+---
+
 ## The Collision Problem
 
 Before we discuss implementations, there's a critical problem: **What if two keys hash to the same index?**
@@ -430,7 +577,7 @@ Higher load → more collisions → longer probe sequences → slower!
 ❌ **Must keep low load factor** - need extra capacity  
 ❌ **Can fill up completely** - requires resize
 
-<details>
+<details markdown="1">
 <summary><strong>🔍 Advanced Topic: What is Clustering?</strong></summary>
 
 ## Understanding Clustering
@@ -679,7 +826,7 @@ Here's a side-by-side comparison to help you choose the right implementation:
 
 What is the load factor of a hash table with 75 items and a capacity of 100?
 
-<details>
+<details markdown="1">
 <summary>Click to see answer</summary>
 
 **Answer:** α = 75/100 = 0.75 (or 75%)
@@ -692,7 +839,7 @@ This is at the threshold where most implementations resize the table!
 
 In a hash table using **separate chaining**, two keys hash to the same bucket. What happens?
 
-<details>
+<details markdown="1">
 <summary>Click to see answer</summary>
 
 **Answer:** Both key-value pairs are stored in a list (chain) at that bucket.
@@ -710,7 +857,7 @@ This is why it's called "chaining" - you chain multiple items together!
 
 Why is the average-case time complexity of hash table operations O(1), but worst-case is O(n)?
 
-<details>
+<details markdown="1">
 <summary>Click to see answer</summary>
 
 **Answer:**
@@ -729,7 +876,7 @@ Example worst case:
 
 Why can't you simply set a deleted slot to `None` in open addressing with linear probing?
 
-<details>
+<details markdown="1">
 <summary>Click to see answer</summary>
 
 **Answer:** Setting a slot to `None` breaks the probe sequence!
@@ -765,7 +912,7 @@ We can't reach "c" anymore! The `None` at slot 1 terminates the probe sequence.
 
 Given a hash table with open addressing at 90% load factor (α = 0.9), what is the expected number of probes?
 
-<details>
+<details markdown="1">
 <summary>Click to see answer</summary>
 
 **Answer:** E[probes] = 1 / (1 - α) = 1 / (1 - 0.9) = 1 / 0.1 = **10 probes**
@@ -784,7 +931,7 @@ Compare to α = 0.5: E[probes] = 1 / (1 - 0.5) = 2 probes
 
 Why does open addressing generally have better cache performance than separate chaining?
 
-<details>
+<details markdown="1">
 <summary>Click to see answer</summary>
 
 **Answer:** **Memory layout matters for CPU caches!**
@@ -819,7 +966,7 @@ You have a hash table with **capacity = 100** using separate chaining. You inser
 
 **Hint:** Think about the birthday paradox!
 
-<details>
+<details markdown="1">
 <summary>Click to see solution</summary>
 
 **Solution:**
@@ -841,6 +988,7 @@ P(no collision) = (100/100) × (99/100) × (98/100) × ... × (81/100)
 ```
 
 Therefore:
+
 ```
 P(at least one collision) = 1 - P(no collision)
                           = 1 - 0.1318
@@ -863,7 +1011,7 @@ Consider an open addressing table with capacity = 8 and load factor α = 0.5 (4 
 
 **Part C:** What is the percentage increase in expected probes due to clustering?
 
-<details>
+<details markdown="1">
 <summary>Click to see solution</summary>
 
 **Part A: Uniform Distribution**
@@ -871,6 +1019,7 @@ Consider an open addressing table with capacity = 8 and load factor α = 0.5 (4 
 Table: `[X, _, X, _, X, _, X, _]`
 
 For a random insertion (uniform hash):
+
 ```
 P(hash to slot i) = 1/8 for all i
 
@@ -889,9 +1038,10 @@ Alternatively using the formula: E[probes] = 1/(1-α) = 1/(1-0.5) = 2 probes (fo
 Table: `[X, X, X, X, _, _, _, _]`
 
 For a random insertion:
+
 ```
 Hash to slot 0: probe 0→1→2→3→4 (empty) = 5 probes
-Hash to slot 1: probe 1→2→3→4 (empty) = 4 probes  
+Hash to slot 1: probe 1→2→3→4 (empty) = 4 probes
 Hash to slot 2: probe 2→3→4 (empty) = 3 probes
 Hash to slot 3: probe 3→4 (empty) = 2 probes
 Hash to slot 4: probe 4 (empty) = 1 probe
@@ -924,7 +1074,7 @@ Given that E[probes] = 1/(1-α), at what load factor α should you resize to **m
 
 **Assume:** You start at capacity C and will eventually reach 2C items (so you need exactly one resize).
 
-<details>
+<details markdown="1">
 <summary>Click to see solution</summary>
 
 **Solution:**
@@ -932,6 +1082,7 @@ Given that E[probes] = 1/(1-α), at what load factor α should you resize to **m
 Let's denote the resize threshold as α_resize.
 
 **Phase 1:** Insert from 0 to α_resize × C items
+
 - Average load factor: α_resize / 2
 - Average probe length: 1 / (1 - α_resize/2)
 - Total cost: (α_resize × C) × [1 / (1 - α_resize/2)]
@@ -939,16 +1090,18 @@ Let's denote the resize threshold as α_resize.
 **Resize cost:** O(α_resize × C)
 
 **Phase 2:** Insert from α_resize × C to 2C items into a table of size 2C
+
 - Items inserted: 2C - α_resize × C = C(2 - α_resize)
 - Average load factor during phase 2: ~α_resize/2
 - Average probe length: 1 / (1 - α_resize/2)
 - Total cost: C(2 - α_resize) × [1 / (1 - α_resize/2)]
 
 **Total cost:**
+
 ```
 Cost = Phase1 + Resize + Phase2
-     = α_resize × C × [1/(1 - α_resize/2)] 
-       + α_resize × C 
+     = α_resize × C × [1/(1 - α_resize/2)]
+       + α_resize × C
        + C(2 - α_resize) × [1/(1 - α_resize/2)]
 ```
 
@@ -968,7 +1121,7 @@ You have a hash table with **m buckets** using separate chaining. You insert **n
 
 **Derive:** What is the expected number of buckets that contain **exactly 2 items**?
 
-<details>
+<details markdown="1">
 <summary>Click to see solution</summary>
 
 **Solution:**
@@ -978,6 +1131,7 @@ For a specific bucket, we need to calculate P(exactly 2 items land in this bucke
 Each item has probability 1/m of hashing to this bucket.
 
 Using the binomial distribution:
+
 ```
 P(exactly k items in bucket) = C(n,k) × (1/m)^k × (1 - 1/m)^(n-k)
 
@@ -1060,7 +1214,7 @@ hm.delete("age")
 print(hm.get("age"))   # Should print None
 ```
 
-<details>
+<details markdown="1">
 <summary>Solution</summary>
 
 ```python
@@ -1151,7 +1305,7 @@ hm.set("c", 3)
 print(hm.get("b"))  # Should print 2
 ```
 
-<details>
+<details markdown="1">
 <summary>Solution</summary>
 
 ```python
@@ -1277,7 +1431,7 @@ hm.delete("b")
 print(hm.get("b"))  # Should print None
 ```
 
-<details>
+<details markdown="1">
 <summary>Solution</summary>
 
 ```python
