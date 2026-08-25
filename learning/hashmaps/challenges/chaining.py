@@ -1,8 +1,11 @@
-class ChainingHashMap:
+from basemap import BaseHashMap
+
+class ChainingHashMap(BaseHashMap):
     def __init__(self, capacity=8):
         self.capacity = capacity
         self.buckets = [[] for _ in range(capacity)]
         self.size = 0
+        self.last_probe_count = 0
 
     def _hash(self, key):
         ## Use python's built-in hash and then modulo self.capacity
@@ -20,10 +23,12 @@ class ChainingHashMap:
         self.size += 1
 
     def get(self, key):
+        self.last_probe_count = 0
         hash_idx = self._hash(key=key)
         ## Reference to list not copy
         bucket = self.buckets[hash_idx]
         for (i, (k, v)) in enumerate(bucket):
+            self.last_probe_count += 1
             if k == key:
                 return v
         return None

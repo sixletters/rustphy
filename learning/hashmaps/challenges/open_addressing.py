@@ -1,10 +1,14 @@
+from basemap import BaseHashMap
+
 DELETED = object()  # Unique tombstone marker, its a constant
 
-class OpenAddressingHashMap:
-    def __init__(self, capacity=8):
+class OpenAddressingHashMap(BaseHashMap):
+    def __init__(self, capacity=8, auto_resize=True):
         self.capacity = capacity
         self.table = [None] * capacity
         self.size = 0
+        self.last_probe_count = 0
+        self.auto_resize = auto_resize
 
     def _hash(self, key):
         return hash(key) % self.capacity
@@ -28,17 +32,19 @@ class OpenAddressingHashMap:
         self.size += 1
         self.table[hash_idx] = (key, value)
 
-        if self._load_factor() > 0.7:
+        if self.auto_resize and self._load_factor() > 0.7:
             self._resize()
 
     def get(self, key):
         # probe until you find key, None, or loop back to start
+        self.last_probe_count = 0
         hash_idx = self._hash(key=key)
         start = hash_idx
 
         ## implement linear probing search
         curr_slot = self.table[hash_idx]
         while curr_slot != None:
+            self.last_probe_count += 1
             if curr_slot != DELETED and curr_slot[0] == key:
                 return curr_slot[1]
             hash_idx += 1
@@ -46,7 +52,7 @@ class OpenAddressingHashMap:
             curr_slot = self.table[hash_idx]
             if hash_idx == start:
                 break
-        
+
         return None
 
     def has(self, key):

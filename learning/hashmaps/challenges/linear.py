@@ -1,5 +1,7 @@
-class LinearHashMap:
-    def __init__(self):
+from basemap import BaseHashMap
+
+class LinearHashMap(BaseHashMap):
+    def __init__(self, capacity=8):
         ## List of key value pairs
         self.pairs = []
 
