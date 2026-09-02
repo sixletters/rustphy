@@ -319,6 +319,8 @@ pub enum ExpressionNode {
     },
     /// An integer literal
     Integer { token: Token, value: i64, id: i32 },
+    /// A float literal
+    Float { token: Token, value: f64, id: i32 },
     // A string literal
     String {
         token: Token,
@@ -435,6 +437,7 @@ impl AstNode for Node {
                 ExpressionNode::HashMap { token, .. } => token.clone(),
                 ExpressionNode::Ternary { token, .. } => token.clone(),
                 ExpressionNode::Range { token, .. } => token.clone(),
+                ExpressionNode::Float { token, .. } => token.clone(),
             },
             Self::StatementNode(val) => match val {
                 StatementNode::Program { statements, .. } => {
@@ -474,6 +477,7 @@ impl AstNode for Node {
                         "false".to_string()
                     }
                 }
+                ExpressionNode::Float { value, .. } => value.to_string(),
                 ExpressionNode::Ternary {
                     condition,
                     then_expr,

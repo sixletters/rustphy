@@ -460,6 +460,11 @@ impl Compiler {
                 self.wc += 1;
                 Ok(())
             }
+            ExpressionNode::Float { value, .. } => {
+                self.instructions.push(Instruction::LDCF { val: *value });
+                self.wc += 1;
+                Ok(())
+            }
             ExpressionNode::String { value, .. } => {
                 self.instructions
                     .push(Instruction::LDSL { val: value.clone() });
@@ -2301,5 +2306,34 @@ mod tests {
             Some(crate::environment::Value::String(s)) => assert_eq!(s, "hello"),
             _ => panic!("Expected String(\"hello\"), got {:?}", result),
         }
+    }
+
+    #[test]
+    fn test_float_compiles_to_ldcf() {
+        let lexer = Lexer::new("3.14".to_string());
+        let mut parser = Parser::new(lexer);
+        let program = parser.parse_program_expression().unwrap();
+
+        let mut compiler = Compiler::new();
+        let instructions = compiler.compile(&program).unwrap();
+
+        assert!(
+            instructions.iter().any(|i| matches!(i, Instruction::LDCF { val } if (*val - 3.14).abs() < f64::EPSILON)),
+            "Expected LDCF(3.14), got {:?}", instructions
+        );
+    }
+
+    #[test]
+    fn test_float_arithmetic_compiles() {
+        let lexer = Lexer::new("1.5 + 2.5".to_string());
+        let mut parser = Parser::new(lexer);
+        let program = parser.parse_program_expression().unwrap();
+
+        let mut compiler = Compiler::new();
+        let instructions = compiler.compile(&program).unwrap();
+
+        let has_ldcf = instructions.iter().filter(|i| matches!(i, Instruction::LDCF { .. })).count();
+        assert_eq!(has_ldcf, 2, "Expected two LDCF instructions");
+        assert!(instructions.iter().any(|i| matches!(i, Instruction::BINOP { ops: crate::instruction::BINOPS::Add })));
     }
 }

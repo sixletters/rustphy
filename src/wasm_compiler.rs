@@ -503,6 +503,7 @@ impl<'a> Compiler<'a> {
             ExpressionNode::Integer { value, .. } => {
                 Ok(format!("i32.const {}\ncall $tag_immediate", value))
             }
+            ExpressionNode::Float { token, value, id } => Ok(format!("hold on")),
             ExpressionNode::Boolean { value, .. } => {
                 let mut runtime = WasmRuntime::new();
                 if *value {

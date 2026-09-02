@@ -361,6 +361,18 @@ impl Parser {
                     id: self.consume_id(),
                 });
             }
+            Token::Float(val) => {
+                let float_value: f64 = match val.parse() {
+                    Ok(num) => num,
+                    Err(e) => return Err(e.to_string()),
+                };
+                self.consume_token();
+                return Ok(ExpressionNode::Float {
+                    token: curr_token.clone(),
+                    value: float_value,
+                    id: self.consume_id(),
+                });
+            }
             Token::Str(val) => {
                 self.consume_token();
                 return Ok(ExpressionNode::String {
@@ -1412,5 +1424,29 @@ mod tests {
             }
             Err(e) => panic!("Parse error: {}", e),
         }
+    }
+
+    #[test]
+    fn test_parse_float_literal() {
+        let expr = parse_expression("3.14");
+        match expr {
+            Ok(ExpressionNode::Float { value, .. }) => {
+                assert!((value - 3.14).abs() < f64::EPSILON);
+            }
+            other => panic!("Expected Float, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_parse_float_in_let() {
+        let input = "let x = 5.5;";
+        let statement = parse_statement(input);
+        assert!(statement.is_ok(), "Expected ok, got {:?}", statement);
+    }
+
+    #[test]
+    fn test_parse_float_arithmetic() {
+        let expr = parse_expression("1.5 + 2.5");
+        assert!(expr.is_ok(), "Expected ok, got {:?}", expr);
     }
 }

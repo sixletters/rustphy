@@ -10,6 +10,7 @@ pub enum Token {
     Ident(String),
     Int(String),
     Str(String),
+    Float(String),
 
     // Operators
     Assign,
@@ -64,6 +65,7 @@ impl Token {
         match self {
             Token::Illegal(c) => c.to_string(),
             Token::Eof => "EOF".to_string(),
+            Token::Float(s) => s.clone(),
             Token::Ident(s) => s.clone(),
             Token::Int(s) => s.clone(),
             Token::Str(s) => format!("\"{}\"", s),

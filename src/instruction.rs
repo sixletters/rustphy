@@ -16,6 +16,11 @@ pub enum Instruction {
     /// Stack effect: [] → [number]
     LDCN { val: i128 },
 
+    /// Load FLOAT constant onto the operand stack.
+    ///
+    /// Stack effect: [] → [float]
+    LDCF { val: f64 },
+
     /// Load identifier value onto the operand stack.
     ///
     /// Used for reading variable values in expressions.

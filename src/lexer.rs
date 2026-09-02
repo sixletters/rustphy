@@ -1,4 +1,7 @@
-use crate::token::{Token, lookup_identifier};
+use crate::{
+    lexer,
+    token::{Token, lookup_identifier},
+};
 
 /// A lexer for tokenizing input source code.
 ///
@@ -216,8 +219,11 @@ impl Lexer {
                     let literal = self.read_identifier();
                     return lookup_identifier(&literal);
                 } else if Lexer::is_digit(self.ch) {
-                    let int = self.read_number();
-                    return Token::Int(int);
+                    let number = self.read_number();
+                    if number.contains(".") {
+                        return Token::Float(number);
+                    }
+                    return Token::Int(number);
                 }
                 let illegal_char = self.ch as char;
                 self.read_char();
@@ -262,6 +268,12 @@ impl Lexer {
         let pos = self.pos;
         while Lexer::is_digit(self.ch) {
             self.read_char();
+        }
+        if matches!(self.ch, b'.') && Lexer::is_digit(self.peek_char()) {
+            self.read_char();
+            while Lexer::is_digit(self.ch) {
+                self.read_char();
+            }
         }
         match self.input.get(pos..self.pos) {
             Some(val) => return val.to_string().clone(),
@@ -458,6 +470,19 @@ mod tests {
 
         assert_eq!(num, "12345");
         assert_eq!(lexer.ch, 0); // Should be at EOF
+    }
+
+    #[test]
+    fn test_read_number_floats() {
+        let mut lexer = Lexer::new(String::from("12.345"));
+        let num = lexer.read_number();
+
+        assert_eq!(num, "12.345");
+        assert_eq!(lexer.ch, 0); // Should be at EOF
+
+        let mut lexer = Lexer::new(String::from("12."));
+        let num = lexer.read_number();
+        assert_eq!(num, "12");
     }
 
     #[test]
@@ -1181,6 +1206,42 @@ mod tests {
         assert_eq!(lexer.next_token(), Token::Ident(String::from("start")));
         assert_eq!(lexer.next_token(), Token::DotDot);
         assert_eq!(lexer.next_token(), Token::Ident(String::from("end")));
+        assert_eq!(lexer.next_token(), Token::Eof);
+    }
+
+    #[test]
+    fn test_float_literal() {
+        let mut lexer = Lexer::new(String::from("3.14"));
+        assert_eq!(lexer.next_token(), Token::Float(String::from("3.14")));
+        assert_eq!(lexer.next_token(), Token::Eof);
+    }
+
+    #[test]
+    fn test_float_in_expression() {
+        let mut lexer = Lexer::new(String::from("5.5 + 2.0"));
+        assert_eq!(lexer.next_token(), Token::Float(String::from("5.5")));
+        assert_eq!(lexer.next_token(), Token::Plus);
+        assert_eq!(lexer.next_token(), Token::Float(String::from("2.0")));
+        assert_eq!(lexer.next_token(), Token::Eof);
+    }
+
+    #[test]
+    fn test_float_does_not_conflict_with_range() {
+        let mut lexer = Lexer::new(String::from("0..10"));
+        assert_eq!(lexer.next_token(), Token::Int(String::from("0")));
+        assert_eq!(lexer.next_token(), Token::DotDot);
+        assert_eq!(lexer.next_token(), Token::Int(String::from("10")));
+        assert_eq!(lexer.next_token(), Token::Eof);
+    }
+
+    #[test]
+    fn test_float_in_let_statement() {
+        let mut lexer = Lexer::new(String::from("let x = 5.5;"));
+        assert_eq!(lexer.next_token(), Token::Let);
+        assert_eq!(lexer.next_token(), Token::Ident(String::from("x")));
+        assert_eq!(lexer.next_token(), Token::Assign);
+        assert_eq!(lexer.next_token(), Token::Float(String::from("5.5")));
+        assert_eq!(lexer.next_token(), Token::Semicolon);
         assert_eq!(lexer.next_token(), Token::Eof);
     }
 }

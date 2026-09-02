@@ -520,6 +520,11 @@ impl Machine {
                 self.pc += 1;
                 Ok(())
             }
+            Instruction::LDCF { val } => {
+                self.os.push(Value::Float(*val));
+                self.pc += 1;
+                Ok(())
+            }
             Instruction::LDI { val } => {
                 self.os.push(Value::Identifier(val.clone()));
                 self.pc += 1;
@@ -3206,5 +3211,54 @@ mod tests {
         ];
         let result = vm.eval(&instructions).unwrap();
         assert!(matches!(result, Some(Value::Number(42))));
+    }
+
+    #[test]
+    fn test_ldcf_pushes_float() {
+        let mut vm = Machine::new();
+        let instructions = vec![
+            Instruction::LDCF { val: 3.14 },
+            Instruction::DONE,
+        ];
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Float(f)) if (f - 3.14).abs() < f64::EPSILON));
+    }
+
+    #[test]
+    fn test_float_addition() {
+        let mut vm = Machine::new();
+        let instructions = vec![
+            Instruction::LDCF { val: 1.5 },
+            Instruction::LDCF { val: 2.5 },
+            Instruction::BINOP { ops: crate::instruction::BINOPS::Add },
+            Instruction::DONE,
+        ];
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Float(f)) if (f - 4.0).abs() < f64::EPSILON));
+    }
+
+    #[test]
+    fn test_float_int_promotion() {
+        let mut vm = Machine::new();
+        let instructions = vec![
+            Instruction::LDCN { val: 2 },
+            Instruction::LDCF { val: 1.5 },
+            Instruction::BINOP { ops: crate::instruction::BINOPS::Add },
+            Instruction::DONE,
+        ];
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Float(f)) if (f - 3.5).abs() < f64::EPSILON));
+    }
+
+    #[test]
+    fn test_float_negation() {
+        let mut vm = Machine::new();
+        let instructions = vec![
+            Instruction::LDCF { val: 2.5 },
+            Instruction::UNOP { ops: crate::instruction::UNOPS::Negative },
+            Instruction::DONE,
+        ];
+        let result = vm.eval(&instructions).unwrap();
+        assert!(matches!(result, Some(Value::Float(f)) if (f - (-2.5)).abs() < f64::EPSILON));
     }
 }
