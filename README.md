@@ -130,7 +130,7 @@ let total = 0;
 for (let i = 0; i < 5; i += 1) {
   total += numbers[i];
   print("Added " + numbers[i] + ", total now: " + total);
-};
+}
 
 print("Final sum: " + total);
 ```
@@ -342,7 +342,7 @@ if (x > 10) {
   print("x is greater than 10");
 } else {
   print("x is 10 or less");
-};
+}
 ```
 
 ### Loops
@@ -350,7 +350,7 @@ if (x > 10) {
 ```javascript
 for (let i = 0; i < 10; i += 1) {
   print(i);
-};
+}
 ```
 
 ### Functions
