@@ -66,9 +66,20 @@ I'm working through MIT's Computer Language Engineering course and documenting e
 
 ---
 
-### Lecture 3: Parsing _(Coming soon...)_
+### [Lecture 3: Shift-Reduce Parsing](lecture_3/data.md)_
 
-**Topics:** Context-free grammars, top-down vs bottom-up parsing, AST construction
+**Topics covered:**
+
+- Context-free grammars (CFGs): terminals, non-terminals, rules, start symbols
+- Sentential forms, rightmost derivations, and handles
+- Pushdown automata (PDAs) and why stacks matter for parsing
+- Shift vs. reduce operations in bottom-up parsing
+- Worked parsing trace for `id + id * id`
+- Parse trees, precedence, associativity, and grammar ambiguity
+- Quiz questions + practice problems
+- Coding challenges: `a^n b^n`, balanced brackets, and table-driven shift-reduce parsing
+
+[**📖 Read Lecture 3 →**](lecture_3/data.md)
 
 ---
 
