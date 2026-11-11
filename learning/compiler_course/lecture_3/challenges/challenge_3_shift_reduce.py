@@ -85,8 +85,35 @@ def shift_reduce(tokens: list) -> bool:
     state_stack = [0]
     symbol_stack = ['$']
     pos = 0
-    # TODO: implement the loop above
-    pass
+
+    while True:
+        state = state_stack[-1]
+        lookahead = tokens[pos]
+        action = ACTION.get((state, lookahead))
+
+        print(f"  stack={symbol_stack}  input={tokens[pos:]}  action={action}")
+
+        if action is None:
+            print(f"Parse error: no action for state {state}, token '{lookahead}'")
+            return False
+
+        if action[0] == 'shift':
+            _, next_state = action
+            symbol_stack.append(lookahead)
+            state_stack.append(next_state)
+            pos += 1
+
+        elif action[0] == 'reduce':
+            _, lhs, rhs = action
+            for _ in rhs:
+                symbol_stack.pop()
+                state_stack.pop()
+            symbol_stack.append(lhs)
+            state_stack.append(GOTO[(state_stack[-1], lhs)])
+
+        elif action[0] == 'accept':
+            print("ACCEPT")
+            return True
 
 
 
@@ -96,8 +123,36 @@ def shift_reduce_tree(tokens: list):
     symbol_stack = ['$']
     tree_stack = [Node('$')]
     pos = 0
-    # TODO: extend your shift_reduce solution with tree_stack
-    pass
+
+    while True:
+        state = state_stack[-1]
+        lookahead = tokens[pos]
+        action = ACTION.get((state, lookahead))
+
+        if action is None:
+            return None
+
+        if action[0] == 'shift':
+            _, next_state = action
+            symbol_stack.append(lookahead)
+            state_stack.append(next_state)
+            tree_stack.append(Node(lookahead))
+            pos += 1
+
+        elif action[0] == 'reduce':
+            _, lhs, rhs = action
+            children = []
+            for _ in rhs:
+                symbol_stack.pop()
+                state_stack.pop()
+                children.append(tree_stack.pop())
+            children.reverse()
+            symbol_stack.append(lhs)
+            state_stack.append(GOTO[(state_stack[-1], lhs)])
+            tree_stack.append(Node(lhs, children))
+
+        elif action[0] == 'accept':
+            return tree_stack[-1]
 
 
 if __name__ == "__main__":

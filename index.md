@@ -55,9 +55,61 @@ I'm working through MIT's 6.035 Computer Language Engineering course and documen
 - Finite automata (DFA and NFA) theory and implementation
 - Converting between regex, NFA, and DFA
 
-**Lecture 3: Parsing** *(Coming soon...)*
+**[Lecture 3: Shift-Reduce Parsing](learning/compiler_course/lecture_3/data.md)**
+- Context-free grammars, derivations, and handles
+- Pushdown automata and why stacks matter for parsing
+- Shift vs. reduce operations with a full worked trace
+- Coding challenges: `a^n b^n`, balanced brackets, table-driven parsing
 
 [**View all lectures →**](learning/compiler_course/)
+
+### [Building Rustphy: A Compiler From Scratch](learning/building_rustphy/)
+
+A narrative, code-first course that follows the **actual commit history** of this repository — from the first lexer to closures, escape analysis, and a WebAssembly backend. Every design decision is explained with real source code, including the parts that are still broken.
+
+#### Chapters
+
+**[Part 0: Why I Built a Programming Language](learning/building_rustphy/part_00_why_a_language.md)**
+- Motivation, language design goals, and why Rust
+- One frontend, two backends: bytecode VM and WebAssembly
+- The real commit timeline and how features drove architecture
+
+**[Part 1: Teaching the Compiler to Read](learning/building_rustphy/part_01_lexer.md)**
+- Hand-written lexer with one-byte lookahead
+- The `3.14` vs `0..10` problem: floats vs. ranges
+- Keyword recognition, string escapes, and error handling
+
+**[Part 2: Giving the Language Structure](learning/building_rustphy/part_02_parser_and_ast.md)**
+- AST design with Rust enums and `Box`
+- Pratt parsing: a 10-line precedence engine
+- Desugaring `x += 5` and lowering `a.b` to `a["b"]`
+
+**[Part 3: From Trees to Bytecode](learning/building_rustphy/part_03_bytecode_compiler.md)**
+- Custom stack-machine instruction set
+- Backpatching forward jumps for conditionals and loops
+- Function bodies inline in the instruction stream
+
+**[Part 4: Building the Virtual Machine](learning/building_rustphy/part_04_virtual_machine.md)**
+- Operand stack, runtime stack, and program counter
+- Lexical environments with `Rc<RefCell<...>>`
+- Closures as code address + captured environment
+
+**[Part 5: Closures Force Us to Think Like Compiler Engineers](learning/building_rustphy/part_05_closures_and_escape_analysis.md)**
+- Symbol tables: names vs. bindings
+- Escape analysis: which variables need heap allocation
+- The bridge between lexical scoping and WASM locals
+
+**[Part 6: Compiling to WebAssembly](learning/building_rustphy/part_06_webassembly.md)**
+- 1-bit tagged values on WASM's `i32`
+- Dual compilation: direct calls vs. closure trampolines
+- Bump allocator, heap objects, and structured control flow
+
+**[Part 7: What Building a Compiler Actually Taught Me](learning/building_rustphy/part_07_lessons.md)**
+- One feature (`for-in`) traced through all seven phases
+- What I got right, what I'd do differently
+- Roadmap: GC, optimizations, type system, JIT
+
+[**Start the course →**](learning/building_rustphy/)
 
 ### [HashMap Implementation Deep Dive](learning/hashmaps/)
 
@@ -85,8 +137,8 @@ Perfect for understanding the data structures that power dictionaries in Python,
 
 - **[GitHub Repository](https://github.com/sixletters/rustphy)** - Source code and examples
 - **Documentation** - Language specs, grammar, and quick reference *(Coming to this site soon)*
-- **Blog Posts** - Implementation insights and learnings *(Coming soon)*
-- **Tutorials** - Getting started guides *(Coming soon)*
+- **[Building Rustphy Course](learning/building_rustphy/)** - A narrative, code-first series following the real compiler from lexer to WebAssembly
+- **[MIT 6.035 Lectures](learning/compiler_course/)** - Compiler theory explained through articles and challenges
 
 ---
 
